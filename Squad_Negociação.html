@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Squad de Negociação</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script>
+/* =================== CONFIGURAÇÃO ===================
+   Copie CLIENT_ID, TENANT_ID e SP_HOSTNAME do index.html de um dos
+   Planos de Ação (mesmo app registration do Azure AD).
+   Enquanto CLIENT_ID começar com "COLE", a ferramenta roda em
+   modo local de teste (dados só neste navegador).                */
+const CONFIG = {
+  CLIENT_ID:   "COLE_AQUI_O_CLIENT_ID",
+  TENANT_ID:   "COLE_AQUI_O_TENANT_ID",
+  SP_HOSTNAME: "COLE_AQUI.sharepoint.com",
+  SP_SITE_PATH:"/sites/SUPRIMENTOS_NEW",
+  LIBRARY_NAME:"",          // vazio = biblioteca padrão (Documentos). Use o mesmo valor dos Planos de Ação.
+  FOLDER:      "CSC - SUPRIMENTOS/GERENCIAL/INDICADORES/DIÁRIA/Squad_Negociacao",
+  SCOPES:      ["User.Read","Sites.ReadWrite.All"]
+};
+</script>
+<style>
+:root{
+  --ink:#16263A; --paper:#F7F8FA; --surface:#FFFFFF; --line:#D9DEE5; --muted:#5B6878;
+  --amber:#F2A900; --amber-soft:#FFF4D6; --good:#1F8A5B; --warn:#C47A00; --bad:#B8392B;
+  --text:#16263A; --btn:#EEF1F5;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#0E1826; --paper:#101A27; --surface:#172435; --line:#2A3A4F; --muted:#9AA8B8;
+    --amber-soft:#3A2F10; --text:#E8EDF3; --btn:#22324A; --good:#3CBF86; --bad:#E0675A; --warn:#E8A33A;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#0E1826; --paper:#101A27; --surface:#172435; --line:#2A3A4F; --muted:#9AA8B8;
+  --amber-soft:#3A2F10; --text:#E8EDF3; --btn:#22324A; --good:#3CBF86; --bad:#E0675A; --warn:#E8A33A;
+}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 60px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--text);font:16px/1.5 "Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3{font-family:Archivo,"Arial Narrow",system-ui,sans-serif;line-height:1.15;margin:0}
+input,select,textarea{font:inherit;color:var(--text)}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.top{background:var(--ink);color:#fff;padding:22px 20px 18px}
+.top-in{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;justify-content:space-between}
+.top h1{font-size:clamp(1.7rem,5.5vw,2.6rem);font-weight:800}
+.top p{margin:6px 0 0;color:#C6D0DC;max-width:60ch}
+.who{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.92rem;color:#C6D0DC}
+.badge{border-radius:12px;padding:2px 10px;font-weight:700;font-size:.8rem}
+.badge.on{background:#1F8A5B;color:#fff}.badge.local{background:var(--amber);color:#16263A}.badge.off{background:#5B6878;color:#fff}
+.who button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:6px 12px;font:600 .9rem "Source Sans 3",sans-serif;cursor:pointer}
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--ink);border-bottom:6px solid var(--amber);overflow-x:auto}
+.tabs-in{max-width:1180px;margin:0 auto;display:flex;gap:4px;padding:0 12px;align-items:center}
+.tabs button{flex:none;border:0;background:transparent;color:#C6D0DC;font:700 .98rem Archivo,sans-serif;padding:12px 14px;cursor:pointer;border-radius:6px 6px 0 0}
+.tabs button[aria-selected="true"]{background:var(--amber);color:#16263A}
+.tabs .back{color:#fff}
+.tabs .cnt{font-weight:500;opacity:.8}
+main{max-width:1180px;margin:0 auto;padding:12px 16px 110px}
+section{margin-top:26px}
+h2{font-size:1.3rem;font-weight:700;margin-bottom:6px}
+.hint{color:var(--muted);margin:0 0 14px;font-size:.95rem;max-width:72ch}
+.btn{border:1px solid var(--line);background:var(--btn);color:var(--text);font:600 .95rem "Source Sans 3",sans-serif;padding:9px 14px;border-radius:6px;cursor:pointer}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#16263A}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.banner{border-radius:8px;padding:12px 14px;margin-top:14px;font-size:.95rem}
+.banner.err{background:#FBE3E0;color:#7A1F14}.banner.info{background:var(--amber-soft)}
+.field input,.field select,.field textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+.field label{display:block;font-size:.85rem;font-weight:600;color:var(--muted);margin-bottom:4px}
+textarea{resize:vertical;min-height:64px}
+.title-in{width:100%;font:800 1.5rem Archivo,sans-serif;border:0;border-bottom:2px solid var(--line);background:transparent;padding:6px 0;margin-top:10px}
+.title-in:focus{outline:none;border-bottom-color:var(--amber)}
+.bidmeta{color:var(--muted);font-size:.88rem;margin-top:4px}
+
+/* Painel */
+.kpis{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi span{display:block;font-size:.85rem;color:var(--muted)}
+.kpi b{font:800 1.4rem Archivo,sans-serif}
+.kpi.hl{background:var(--ink);color:#fff;border-color:var(--ink)}
+.kpi.hl span{color:#B7C3D1}
+.scroll{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;min-width:2100px;width:100%;font-size:.92rem}
+th{background:var(--ink);color:#fff;font:700 .8rem Archivo,sans-serif;text-align:left;padding:10px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:9px 8px;vertical-align:top}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:var(--amber-soft)}
+td.r{text-align:right;white-space:nowrap}
+.ok{color:var(--good)}.no{color:var(--bad)}
+.sv{font-weight:700}
+.sv small{display:block;font-weight:600;font-size:.78rem;color:var(--muted)}
+.risk-Alto{color:var(--bad);font-weight:700}.risk-Médio{color:var(--warn);font-weight:700}.risk-Baixo{color:var(--good);font-weight:700}
+.st{display:inline-block;padding:2px 9px;border-radius:10px;font-size:.82rem;font-weight:700;background:var(--btn);white-space:nowrap}
+.st-Fechado{background:#DDF3E8;color:#12603F}.st-Cancelado{background:#EEE;color:#666}.st-Em\ negociação{background:var(--amber-soft)}
+tfoot td{background:var(--btn);font-weight:700}
+.late{color:var(--bad);font-weight:700}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.filters select,.filters input{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.mchart{display:flex;gap:10px;align-items:flex-end;overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 14px 10px;min-height:190px;margin-top:12px}
+.mcol{flex:0 0 64px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.78rem}
+.mcol .v{font-weight:700;white-space:nowrap}
+.mcol .bar{width:34px;border-radius:5px 5px 0 0;background:var(--amber);min-height:2px}
+.mcol .bar.neg{background:var(--bad)}
+.mcol .l{color:var(--muted);white-space:nowrap}
+table.small{min-width:1100px}
+h3.sub{font-size:1.05rem;margin:22px 0 4px}
+table.cct{min-width:1900px}
+.cct td{vertical-align:middle}
+.cct input,.cct select{width:100%;min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:5px;background:var(--paper)}
+.cct tr.sel td{background:var(--amber-soft)}
+.cct .calcv{font-weight:700;white-space:nowrap}
+.cct .calcv small{display:block;font-weight:600;font-size:.78rem;color:var(--muted)}
+.star{display:inline-block;margin-left:4px;font-size:.72rem;font-weight:700;padding:1px 6px;border-radius:9px;background:#DDF3E8;color:#12603F;white-space:nowrap}
+.rofield{padding:9px 10px;border:1px dashed var(--line);border-radius:6px;background:var(--surface);min-height:42px;font-weight:600}
+.rofield small{display:block;font-weight:400;color:var(--muted);font-size:.8rem}
+.rofield a{color:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:var(--amber);font-weight:400;font-size:.82rem}
+.bad{border-color:var(--bad)!important;background:#FBE3E0!important;color:#7A1F14!important}
+.seg{flex-wrap:wrap;justify-content:flex-end}
+.seg.opts button{width:auto;padding:0 10px;font:600 .85rem "Source Sans 3",sans-serif;height:36px}
+.bchip{border:1px solid var(--line);background:var(--paper);color:var(--text);border-radius:16px;padding:5px 11px;font:600 .85rem "Source Sans 3",sans-serif;cursor:pointer}
+.bchip[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.bwrap{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end;flex:1 1 360px}
+.bwrap input,.idxin input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);min-width:0}
+.idxin{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.reflinks{display:flex;flex-wrap:wrap;gap:8px}
+.reflinks a{text-decoration:none;font-size:.9rem}
+.refcard{border-left-color:#3B82C4}
+.st-conf{background:#DDF3E8;color:#12603F}.st-prev{background:var(--amber-soft)}
+tr.venc td{color:var(--muted)}
+.mcol .bar.prev{background:repeating-linear-gradient(45deg,var(--amber),var(--amber) 4px,#F7D27A 4px,#F7D27A 8px)}
+.vscroll{max-height:min(520px,62vh);overflow:auto;overscroll-behavior:contain}
+.vscroll thead th{position:sticky;top:0;z-index:2}
+.vscroll tfoot td{position:sticky;bottom:0;z-index:2;box-shadow:0 -1px 0 var(--line)}
+.vscroll::-webkit-scrollbar{width:10px;height:10px}
+.vscroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+.btn.danger{border-color:#E9B4AD;background:#FBE3E0;color:#7A1F14}
+.btn.danger:hover{background:#F6CFC9}
+.banner.trash{background:#FBE3E0;color:#7A1F14;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.hl-list{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:.93rem}
+.hl-list li{margin:3px 0}
+.feed{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.feed li{padding:10px 14px;border-bottom:1px solid var(--line);font-size:.93rem}
+.feed li:last-child{border-bottom:0}
+.feed .when{color:var(--muted);font-size:.82rem}
+.feed a{color:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--amber)}
+
+/* BID */
+.progress{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;flex-wrap:wrap}
+.pips{display:flex;gap:6px}
+.pip{width:28px;height:8px;border-radius:4px;background:var(--line)}
+.pip.on{background:var(--good)}
+.qcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:12px;border-left:5px solid var(--line)}
+.qcard.done{border-left-color:var(--good)}
+.qhead{display:flex;gap:12px;align-items:baseline}
+.qnum{font:800 1.6rem Archivo,sans-serif;color:var(--amber);flex:none;width:1.4em}
+.qhead h3{font-size:1.12rem}
+.qhead p{margin:2px 0 0;color:var(--muted);font-size:.92rem}
+.qbody{margin-top:12px;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.qbody .wide{grid-column:1/-1}
+.bench{display:grid;grid-template-columns:1fr 150px;gap:8px}
+.bench input{padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:18px;padding:6px 12px;background:var(--paper);cursor:pointer;font-weight:600;font-size:.93rem}
+.chip input{accent-color:var(--amber)}
+.calc{font-size:.9rem;color:var(--muted)}
+.calc strong{color:var(--text)}
+.suppliers{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.supcard{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 6px 10px 10px}
+.sup{display:flex;gap:6px;align-items:center}
+.files{list-style:none;margin:4px 0 0;padding:0 4px 0 18px;font-size:.88rem}
+.files li{display:flex;align-items:center;gap:6px;padding:3px 0;border-top:1px dashed var(--line)}
+.files a{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;font-weight:600}
+.files small{color:var(--muted);white-space:nowrap}
+.files .icon{font-size:1rem;padding:0 6px}
+.attach{display:inline-flex;align-items:center;gap:6px;margin:8px 0 0 18px;font-weight:700;font-size:.88rem;cursor:pointer;border:1px dashed var(--amber);border-radius:6px;padding:5px 10px;background:var(--amber-soft)}
+.attach input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.attach:focus-within{outline:3px solid var(--amber);outline-offset:2px}
+.upl{margin:6px 0 0 18px;font-size:.85rem;color:var(--muted)}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block}
+.sup input{flex:1;min-width:0;border:0;background:transparent;font:600 1rem "Source Sans 3",sans-serif;padding:6px 0}
+.icon{border:0;background:transparent;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px 8px;border-radius:6px}
+.icon:hover{background:var(--btn)}
+.crit{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.crit-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:14px 14px 8px}
+.crit-head h3{font-size:1.05rem;font-weight:700}
+.crit-head .q{color:var(--muted);font-size:.9rem;margin-top:2px}
+.weight{flex:none;text-align:right}
+.weight label{display:block;font-size:.8rem;color:var(--muted)}
+.weight input{width:64px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font:700 1rem Archivo,sans-serif;text-align:center}
+.guide{margin:0 14px 10px;font-size:.85rem;color:var(--muted)}
+.guide summary{cursor:pointer;color:var(--text);font-weight:600}
+.guide dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:8px 0 0}
+.guide dt{font-weight:700;color:var(--text)}
+.guide dd{margin:0}
+.scores{border-top:1px solid var(--line)}
+.srow{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.srow:last-child{border-bottom:0}
+.srow .name{flex:1 1 120px;min-width:0;font-weight:600;display:flex;align-items:center;gap:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg{display:flex;gap:4px}
+.seg button{width:40px;height:38px;border:1px solid var(--line);background:var(--paper);color:var(--text);border-radius:6px;font:700 1rem Archivo,sans-serif;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .seg button[aria-pressed="true"]{background:var(--amber);color:#16263A;border-color:var(--amber)}}
+.seg button:disabled{opacity:.45;cursor:not-allowed}
+.price input{width:130px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+.auto{font-size:.8rem;color:var(--muted)}
+.wsum{font-weight:700}
+.result{background:var(--ink);color:#fff;border-radius:12px;padding:20px;margin-top:28px}
+.result h2{color:#fff}
+.verdict{background:var(--amber);color:#16263A;border-radius:8px;padding:14px 16px;margin:12px 0 14px}
+.verdict strong{font-family:Archivo,sans-serif;font-size:1.25rem;display:block}
+.facts{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:18px}
+.fact{border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:10px 12px}
+.fact span{display:block;font-size:.82rem;color:#B7C3D1}
+.fact b{font:800 1.15rem Archivo,sans-serif}
+.fact .ok{color:#6FE0A8}.fact .no{color:#FF9A8C}
+.bars{display:grid;gap:12px}
+.bar-top{display:flex;justify-content:space-between;gap:10px;font-weight:600}
+.bar-top .pct{font-family:Archivo,sans-serif;font-weight:800;font-size:1.3rem}
+.track{height:12px;background:rgba(255,255,255,.12);border-radius:6px;overflow:hidden;margin-top:4px}
+.fill{height:100%;border-radius:6px;transition:width .4s ease}
+.meta{font-size:.85rem;color:#B7C3D1}
+.gaps{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:14px}
+.gap{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--amber);border-radius:8px;padding:14px}
+.gap h3{font-size:1rem;margin-bottom:8px}
+.gap ul{margin:0;padding-left:18px}
+.gap li{margin-bottom:6px;font-size:.93rem}
+.tag{display:inline-block;font-size:.78rem;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--amber-soft);margin-left:4px}
+.empty{color:var(--muted)}
+.trade{background:var(--amber-soft);border-radius:8px;padding:12px 14px;margin-top:14px;font-size:.95rem}
+.acomp{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.acomp .wide{grid-column:1/-1}
+.summary{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:12px}
+.hist{list-style:none;margin:0;padding:0;border-left:3px solid var(--line);margin-left:6px}
+.hist li{position:relative;padding:0 0 14px 18px}
+.hist li::before{content:"";position:absolute;left:-8px;top:6px;width:13px;height:13px;border-radius:50%;background:var(--surface);border:3px solid var(--line)}
+.hist li.c::before{border-color:var(--amber)}
+.hist li.a::before{border-color:#3B82C4}
+.hist .when{color:var(--muted);font-size:.82rem}
+.hist .txt{white-space:pre-wrap}
+
+.savebar{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--ink);color:#fff;border-top:4px solid var(--amber);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.savebar-in{max-width:1180px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:10;border:1px solid rgba(255,255,255,.25)}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion: reduce){.fill,.toast{transition:none}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div><h1>Squad de Negociação</h1></div>
+  <div class="who"><span class="badge" id="mode"></span><span id="userName"></span><button id="authBtn" hidden></button></div>
+</div></header>
+
+<nav class="tabs" role="tablist"><div class="tabs-in" id="tabs"></div></nav>
+
+<main>
+<div id="banner"></div>
+
+<!-- ===== PAINEL ===== -->
+<div id="vPainel">
+  <section>
+    <h2>Painel executivo de negociação</h2>
+    <div class="kpis" id="kpis"></div>
+    <div class="filters">
+      <select id="fStatus" aria-label="Filtrar por status"></select><select id="fTipo" aria-label="Filtrar por tipo"><option value="">Todos os tipos</option><option value="recorrente">Contratos recorrentes</option><option value="esporadica">Compras esporádicas</option></select>
+      <select id="fArea" aria-label="Filtrar por área"></select><select id="fMes" aria-label="Filtrar por mês"></select><select id="fComprador" aria-label="Filtrar por comprador"></select>
+      <input id="fBusca" type="search" placeholder="Buscar fornecedor, escopo ou responsável" aria-label="Buscar">
+      <button class="btn primary" id="newBid">Novo contrato recorrente</button><button class="btn primary" id="newSpot">Nova compra esporádica</button>
+      <button class="btn" id="reload">Atualizar</button>
+      <button class="btn" id="copyTsv">Copiar para Excel</button>
+      <button class="btn" id="bkDown">Baixar backup</button>
+      <button class="btn" id="trashOpen">🗑 Lixeira <span id="trashCnt"></span></button>
+      <label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="bkUp" accept=".json" hidden></label>
+    </div>
+    <div class="scroll vscroll"><table>
+      <thead><tr><th>BID</th><th>Tipo</th><th>Área solicitante</th><th>Fornecedor</th><th>Escopo</th><th>Valor médio</th><th>Proposta</th><th>Target</th><th>Saving</th><th>Prazo pgto</th><th>SLA</th><th>Garantia</th><th>Reajuste</th><th>Plus/Benefícios</th><th>Risco</th><th>Status</th><th>Observações</th><th>Responsável</th><th>Comprador</th><th>Prazo</th><th>Fechamento</th></tr></thead>
+      <tbody id="pbody"></tbody><tfoot><tr id="pfoot"></tr></tfoot>
+    </table></div>
+  </section>
+  <section id="trashSec" hidden>
+    <h2>Lixeira</h2>
+    <p class="hint">BIDs excluídos não aparecem no painel, nos indicadores nem no cronograma. Ficam guardados aqui com o histórico completo e podem ser restaurados a qualquer momento.</p>
+    <div class="scroll vscroll"><table class="small" style="min-width:900px">
+      <thead><tr><th>BID</th><th>Tipo</th><th>Área solicitante</th><th>Fornecedor</th><th>Status</th><th>Excluído em</th><th>Por</th><th>Motivo</th><th></th></tr></thead>
+      <tbody id="trashBody"></tbody></table></div>
+  </section>
+  <section>
+    <h2>Cronograma de pagamentos</h2>
+    <div class="kpis" id="pgKpis"></div>
+    <div class="filters">
+      <select id="pgPer" aria-label="Período do cronograma"><option value="30d">Próximos 30 dias</option><option value="3m">Próximos 3 meses</option><option value="6m">Próximos 6 meses</option><option value="12m" selected>Próximos 12 meses</option><option value="all">Todo o período</option><option value="past">Já vencidas</option></select>
+      <button class="btn" id="copyPg">Copiar cronograma para Excel</button>
+    </div>
+    <div class="mchart" id="pgChart"></div>
+    <div class="scroll vscroll"><table class="small" style="min-width:1000px">
+      <thead><tr><th>Vencimento</th><th>BID</th><th>Tipo</th><th>Área solicitante</th><th>Fornecedor</th><th>Parcela</th><th>Valor</th><th>Fechado em</th><th>Comprador</th></tr></thead>
+      <tbody id="pgBody"></tbody><tfoot><tr id="pgFoot"></tr></tfoot></table></div>
+    <div id="pgMiss"></div>
+  </section>
+  <section>
+    <h2>Indicadores mensais</h2>
+    <div class="mchart" id="mChart"></div>
+    <div class="scroll"><table class="small">
+      <thead><tr><th>Mês</th><th>BIDs iniciados</th><th>Esporádicas</th><th>Recorrentes</th><th>Fechados</th><th>Cancelados</th><th>Saving fechado</th><th>Saving %</th><th>Meta atingida</th><th>SLA no prazo</th><th>Ciclo médio</th><th>Preparação 4/4</th><th>Fechamento registrado</th></tr></thead>
+      <tbody id="mBody"></tbody></table></div>
+    <h3 class="sub" id="cTitle">Por comprador</h3>
+    <div class="scroll"><table class="small" style="min-width:900px">
+      <thead><tr><th>Comprador</th><th>BIDs iniciados</th><th>Em aberto</th><th>Fechados</th><th>Saving fechado</th><th>Saving %</th><th>Meta atingida</th><th>SLA no prazo</th><th>Ciclo médio</th><th>Prazos vencidos</th></tr></thead>
+      <tbody id="cBody"></tbody></table></div>
+    <h3 class="sub" id="aTitle">Por área solicitante</h3>
+    <div class="scroll"><table class="small" style="min-width:900px">
+      <thead><tr><th>Área solicitante</th><th>BIDs iniciados</th><th>Em aberto</th><th>Fechados</th><th>Saving fechado</th><th>Saving %</th><th>Meta atingida</th><th>SLA no prazo</th><th>Ciclo médio</th><th>Prazos vencidos</th></tr></thead>
+      <tbody id="aBody"></tbody></table></div>
+    <div class="row">
+      <button class="btn" id="copyInd">Copiar indicadores para Excel</button>
+      <button class="btn primary" id="regMes">Registrar fechamento do mês</button>
+    </div>
+  </section>
+  <section>
+    <h2>Últimas movimentações</h2>
+    <p class="hint">Histórico de todos os BIDs, do mais recente para o mais antigo.</p>
+    <ul class="feed" id="feed"></ul>
+  </section>
+</div>
+
+<!-- ===== BID ===== -->
+<div id="vBid" hidden>
+  <input class="title-in" id="dealName" placeholder="Nome do BID (ex.: Manutenção de frota 2027)" aria-label="Nome do BID">
+  <div class="row" style="margin-top:8px"><div class="field" style="min-width:230px"><label for="bidTipo">Tipo de negociação</label><select id="bidTipo"><option value="recorrente">Contrato recorrente</option><option value="esporadica">Compra esporádica</option></select></div>
+    <div class="field" style="min-width:230px"><label for="bidArea">Área solicitante</label><input id="bidArea" list="areasList" placeholder="Selecione ou digite" autocomplete="off"><datalist id="areasList"></datalist></div></div>
+  <div class="bidmeta" id="bidMeta"></div>
+  <div id="trashBanner"></div>
+  <div class="row" style="margin-top:6px"><button class="btn danger" id="trashBtn">🗑 Mover para a lixeira</button></div>
+
+  <div id="prep">
+  <section>
+    <h2>4 perguntas obrigatórias antes da mesa</h2>
+    <p class="hint">Nenhum BID vai para negociação sem essas respostas. O valor médio e a meta geram o saving e o target, e o BATNA aparece quando nenhuma proposta for boa.</p>
+    <div class="progress"><div class="pips" id="pips"></div><span id="progTxt"></span></div>
+    <div class="qcard" id="q1"><div class="qhead"><span class="qnum">1</span><div><h3 id="q1t">Qual o valor médio do Item/Serviço?</h3><p id="q1p"></p></div></div>
+      <div class="qbody">
+        <div class="field"><label for="b_atual" id="q1a">Valor médio do Item/Serviço (R$)</label><input id="b_atual" class="money" type="text" inputmode="decimal" placeholder="0,00" data-b="atual" autocomplete="off"></div>
+        <div class="field"><label for="b_qtdAno" id="q1b">Quantidade por ano</label><input id="b_qtdAno" type="text" inputmode="numeric" placeholder="12" data-b="qtdAno" autocomplete="off"></div>
+        <div class="field"><label>Custo anual (calculado)</label><div class="rofield" id="anualCalc">—</div></div>
+        <div class="field wide"><label for="b_hist" id="q1c">Histórico de reajustes</label><textarea id="b_hist" data-b="hist" placeholder="Ex.: 2024 +6,5% (IPCA), 2025 +8% (acima do índice)"></textarea></div>
+      </div></div>
+    <div class="qcard" id="q3"><div class="qhead"><span class="qnum">2</span><div><h3>Qual é o nosso objetivo?</h3><p>Ex.: redução de 8%, congelamento por 12 meses, aumento de prazo de pagamento.</p></div></div>
+      <div class="qbody">
+        <div class="field"><label for="b_meta">Meta de redução (%)</label><input id="b_meta" class="pct" type="text" inputmode="decimal" placeholder="ex.: 7,5" data-b="meta" autocomplete="off"></div>
+        <div class="calc" id="targetCalc" style="align-self:end"></div>
+        <div class="field wide"><label for="b_obj">Outros objetivos</label><textarea id="b_obj" data-b="obj" placeholder="Ex.: congelar preço por 12 meses e ampliar pagamento para 60 dias"></textarea></div>
+      </div></div>
+    <div class="qcard" id="q4"><div class="qhead"><span class="qnum">3</span><div><h3>O que podemos oferecer em troca?</h3><p>Nossas moedas de troca para conseguir as concessões.</p></div></div>
+      <div class="qbody"><div class="chips wide" id="offerChips"></div>
+        <div class="field wide"><label for="b_offerTxt">Detalhes</label><textarea id="b_offerTxt" data-b="offerTxt" placeholder="Ex.: contrato de 24 meses com volume mínimo de 1.200 entregas/mês"></textarea></div></div></div>
+    <div class="qcard" id="q5"><div class="qhead"><span class="qnum">4</span><div><h3>Qual é nosso BATNA?</h3><p>O que fazemos se não chegarmos a um acordo?</p></div></div>
+      <div class="qbody">
+        <div class="field"><label for="b_batna">Alternativa principal</label><select id="b_batna" data-b="batna"></select></div>
+        <div class="field wide"><label for="b_batnaTxt">Como executaríamos</label><textarea id="b_batnaTxt" data-b="batnaTxt" placeholder="Ex.: Fornecedor C já homologado, assume em 30 dias"></textarea></div>
+      </div></div>
+    <div class="qcard refcard" id="refCard"><div class="qhead"><span class="qnum">🔎</span><div><h3>Referência de mercado</h3><p>Pesquise pelo título do BID e registre um valor encontrado. É só consulta: não entra no saving nem nas notas.</p></div></div>
+      <div class="qbody">
+        <div class="field wide"><label for="ref_termo">Termo de busca</label><input id="ref_termo" data-ref="termo" autocomplete="off"></div>
+        <div class="wide reflinks" id="refLinks"></div>
+        <div class="field"><label for="ref_valor">Valor de referência (R$)</label><input id="ref_valor" class="money" type="text" inputmode="decimal" placeholder="0,00" data-ref="valor" autocomplete="off"></div>
+        <div class="field"><label for="ref_fonte">Fonte (link ou nome do site)</label><input id="ref_fonte" data-ref="fonte" autocomplete="off"></div>
+        <div class="calc wide" id="refCalc"></div>
+      </div></div>
+    <div class="row"><button class="btn primary" data-go="aval">Ir para a avaliação das propostas</button></div>
+  </section>
+  </div>
+
+  <div id="aval" hidden>
+  <section>
+    <h2>Fornecedores</h2>
+    <p class="hint">Até 5 propostas. Toque no nome para editar e use <strong>Anexar orçamento</strong> para guardar a proposta de cada fornecedor (PDF, imagem, Excel, Word ou e-mail).</p>
+    <div class="suppliers" id="suppliers"></div>
+    <div class="row"><button class="btn" id="addSup">Adicionar fornecedor</button><button class="btn" id="resetW">Restaurar pesos padrão</button></div>
+  </section>
+  <section>
+    <h2>Avaliação das propostas</h2>
+    <span id="wsum" hidden></span>
+    <div id="criteria"></div>
+  </section>
+  <section class="result" aria-live="polite">
+    <h2>Resultado</h2>
+    <div id="verdict"></div><div class="facts" id="facts"></div><div class="bars" id="bars"></div>
+  </section>
+  <section>
+    <h2>O que levar para a mesa</h2>
+    <p class="hint">Critérios com maior impacto a melhorar, ordenados por peso × distância da nota máxima. Quando um concorrente oferece mais, isso aparece como argumento.</p>
+    <div class="gaps" id="gaps"></div><div id="trade"></div>
+    <div class="row"><button class="btn primary" data-go="acomp">Ir para o acompanhamento</button><button class="btn" id="copy">Copiar resumo</button></div>
+  </section>
+  </div>
+
+  <div id="acomp" hidden>
+  <section>
+    <h2>Acompanhamento</h2>
+    <div class="summary" id="acSummary"></div>
+    <div class="acomp">
+      <div class="field"><label for="p_forn">Fornecedor</label><select id="p_forn" data-pn="forn"></select></div>
+      <div class="field"><label for="p_escopo">Escopo</label><input id="p_escopo" data-pn="escopo"></div>
+      <div class="field"><label for="p_pgto">Condição de pagamento do fornecedor</label><input id="p_pgto" data-pn="pgto" placeholder="ex.: 60 dias"></div>
+      <div class="field"><label>SLA</label><div class="rofield" id="ro_sla"></div></div>
+      <div class="field"><label for="p_sla">Complemento do SLA</label><input id="p_sla" data-pn="sla" placeholder="ex.: 98% das entregas no prazo"></div>
+      <div class="field"><label>Tempo de garantia</label><div class="rofield" id="ro_gar"></div></div>
+      <div class="field"><label>Plus/Benefícios</label><div class="rofield" id="ro_bens"></div></div>
+      <div class="field"><label>Índice de reajuste</label><div class="rofield" id="ro_idx"></div></div>
+      <div class="field"><label for="p_risco">Risco</label><select id="p_risco" data-pn="risco"></select></div>
+      <div class="field"><label for="p_status">Status</label><select id="p_status" data-pn="status"></select></div>
+      <div class="field wide"><label for="p_acao">Descrições importantes e observações</label><textarea id="p_acao" data-pn="acao" rows="3"></textarea></div>
+      <div class="field"><label for="p_resp">Responsável</label><input id="p_resp" data-pn="resp"></div>
+      <div class="field"><label for="p_prazo">Prazo</label><input id="p_prazo" type="date" data-pn="prazo"></div>
+      <div class="field"><label for="p_comprador">Comprador</label><input id="p_comprador" data-pn="comprador" list="compradores"><datalist id="compradores"></datalist></div>
+      <div class="field"><label for="p_fechamento">Data de fechamento</label><input id="p_fechamento" type="date" data-pn="fechamento"></div>
+    </div>
+  </section>
+  <section>
+    <h2>Condições comerciais</h2>
+    <p class="hint">Preencha as condições de cada fornecedor participante para comparar. Os cartões mostram o fornecedor escolhido, que é o que vai para o painel. Se o valor da parcela ficar em branco, a ferramenta sugere proposta ÷ quantidade de parcelas. Alterações entram no histórico ao salvar.</p>
+    <h3 class="sub" id="ccTitle" style="margin-top:6px">Fornecedor escolhido</h3>
+    <div class="summary" id="ccCards"></div>
+    <h3 class="sub">Comparativo dos participantes</h3>
+    <div class="scroll"><table class="cct">
+      <thead><tr><th>Fornecedor</th><th>Proposta</th><th>Tempo de contrato</th><th>Moeda</th><th>Qtd. parcelas</th><th>Valor da parcela</th><th>1º pagamento</th><th>Último previsto</th><th>Total parcelado</th><th>SLA / entrega</th><th>Garantia</th><th>Plus/Benefícios</th><th>Índice de reajuste</th><th>Multa rescisória</th></tr></thead>
+      <tbody id="ccBody"></tbody></table></div>
+    <div id="ccHl"></div>
+    <div class="row"><button class="btn" id="copyCC">Copiar comparativo para Excel</button></div>
+  </section>
+  <section>
+    <h2>Histórico do BID</h2>
+    <div class="field"><label for="cmt">Novo comentário</label><textarea id="cmt" placeholder="Ex.: Fornecedor aceitou 60 dias, mas pediu contrato de 24 meses"></textarea></div>
+    <div class="row"><button class="btn primary" id="addCmt">Registrar comentário</button></div>
+    <section><ul class="hist" id="hist"></ul></section>
+  </section>
+  </div>
+</div>
+</main>
+
+<div class="savebar" id="savebar" hidden><div class="savebar-in">
+  <span id="saveTxt">Alterações não salvas neste BID</span>
+  <span class="row" style="margin:0"><button class="btn" id="discard">Descartar</button><button class="btn primary" id="saveBtn">Salvar</button></span>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ===================== DADOS FIXOS ===================== */
+const COLORS=["#F2A900","#3B82C4","#1F8A5B","#B8392B","#7A5AC7"];
+const DIAS=[["1a5","1 a 5 dias",5],["6a15","6 a 15 dias",4],["16a30","16 a 30 dias",3],["30+","Mais de 30 dias",1]];
+const MESES=[["ate3","Até 3 meses",1],["4a6","4 a 6 meses",3],["7a12","7 a 12 meses",4],["12+","Mais de 12 meses",5]];
+const MULTA=[["nao","Não",5],["ate12","Sim, multa por até 12 meses",4],["mais12","Sim, multa por mais de 12 meses",3],["integral","Sim, multa integral / sem prazo definido",1]];
+const BENS=["Treinamento","Suporte","Sistema","Relatórios","Gestor de conta dedicado"];
+const INDICES=["IPCA","IGP-M","INPC","IGP-DI","IPC-Fipe","INCC","IST (telecomunicações)","Dissídio/Convenção coletiva","Variação cambial","Sem reajuste / preço fixo"];
+const AREAS=["Operações","Frota","Facilities/Manutenção","TI","RH","Financeiro","Comercial","Jurídico","Suprimentos","Diretoria"];
+const G_PGTO=["À vista sem desconto relevante (nota 1)","2 a 5 parcelas (nota 3)","6 ou mais parcelas, ou à vista com 30%+ de desconto (nota 4–5)"];
+const CRITERIA_REC=[
+ {k:"preco",t:"Preço",q:"Preço proposto comparado às outras cotações.",w:28,price:true,g:["Bem acima das outras cotações","Na média das cotações","Menor preço, com custos abertos"]},
+ {k:"tco",t:"Custo total (TCO)",q:"Frete, instalação, manutenção, consumo e descarte incluídos?",w:10,g:["Muitos custos ocultos fora da proposta","Parte dos custos incluída","Custo total claro e competitivo"]},
+ {k:"volume",removed:true,t:"Volume e compromisso",q:"",w:0,g:["","",""]},
+ {k:"pgto",t:"Condição de pagamento",q:"Calculada pela quantidade de parcelas informada nas condições comerciais.",w:12,pgto:true,kind:"pgto",g:G_PGTO},
+ {k:"reajuste",t:"Reajuste contratual",q:"Índice, periodicidade e teto de reajuste definidos.",w:8,idx:true,g:["Reajuste livre ou indefinido","Índice oficial definido, sem teto","Índice oficial + teto + repasse de queda"]},
+ {k:"sla",t:"SLA e tempo de entrega/início",q:"Prazo para entregar o item ou iniciar o serviço após o pedido/assinatura.",w:20,sla:true,kind:"opts",opts:DIAS,ev:"Tempo de entrega",g:["Mais de 30 dias","16 a 30 dias","1 a 5 dias"]},
+ {k:"qualidade",t:"Qualidade e garantia",q:"Tempo de garantia, critérios de aceite, índice de defeitos e reposição.",w:12,gar:true,kind:"opts",opts:MESES,ev:"Garantia",g:["Até 3 meses de garantia","4 a 6 meses de garantia","Mais de 12 meses de garantia"]},
+ {k:"entrega",removed:true,t:"Prazo de entrega e flexibilidade",q:"",w:0,g:["","",""]},
+ {k:"servicos",t:"Serviços agregados (Plus/Benefícios)",q:"Treinamento, suporte, sistema e outros diferenciais oferecidos.",w:4,bens:true,kind:"bens",ev:"Benefícios",g:["Nenhum benefício","1 benefício","3 ou mais benefícios"]},
+ {k:"protecao",t:"Proteção contratual e saída",q:"Multa na quebra de contrato? Multa por rescisão antecipada e período em que ela se aplica.",w:6,multa:true,kind:"opts",opts:MULTA,ev:"Multa rescisória",g:["Multa integral ou sem prazo definido","Multa por mais de 12 meses","Sem multa na quebra de contrato"]}
+];
+const CRITERIA_SPOT=[
+ {k:"preco",t:"Preço vs cotações",q:"Menor preço entre as cotações.",w:30,price:true,g:["Bem acima das outras cotações","Na média das cotações","Menor preço entre as cotações"]},
+ {k:"entrega",t:"Prazo de entrega",q:"Prazo para entregar o item após o pedido.",w:20,sla:true,kind:"opts",opts:DIAS,ev:"Tempo de entrega",g:["Mais de 30 dias","16 a 30 dias","1 a 5 dias"]},
+ {k:"conformidade",t:"Conformidade com a especificação",q:"Item exatamente como solicitado: marca, modelo, norma, quantidade.",w:15,g:["Item diferente ou similar não aprovado","Atende com pequenas ressalvas","Atende 100% da especificação"]},
+ {k:"custofinal",t:"Custo final entregue",q:"Frete, impostos, instalação e taxas incluídos no valor.",w:10,g:["Frete e taxas cobrados à parte","Parte dos custos incluída","Preço fechado, entregue no local, sem adicionais"]},
+ {k:"pgto",t:"Condição de pagamento",q:"Calculada pela quantidade de parcelas informada nas condições comerciais.",w:10,pgto:true,kind:"pgto",g:G_PGTO},
+ {k:"garantia",t:"Garantia e pós-venda",q:"Tempo de garantia, troca em caso de defeito, assistência técnica.",w:8,gar:true,kind:"opts",opts:MESES,ev:"Garantia",g:["Até 3 meses de garantia","4 a 6 meses de garantia","Mais de 12 meses de garantia"]},
+ {k:"confiab",t:"Confiabilidade do fornecedor",q:"Cadastro regular, documentação fiscal em dia, histórico e referências.",w:7,g:["Fornecedor desconhecido, sem documentação","Documentação ok, sem histórico com o grupo","Homologado, com bom histórico conosco"]}
+];
+const TIPOS={recorrente:{nome:"Contrato recorrente",crit:CRITERIA_REC,
+   offers:["Prazo contratual maior","Volume","Exclusividade","Antecipação de pagamento","Previsibilidade de demanda","Consolidação no grupo"],
+   q1:["Qual o valor médio do Item/Serviço?","Valor médio pago ou orçado, quantidade por ano e histórico de reajustes.","Valor médio do Item/Serviço (R$)","Quantidade por ano","Histórico de reajustes","Ex.: 2024 +6,5% (IPCA), 2025 +8% (acima do índice)"]},
+ esporadica:{nome:"Compra esporádica",crit:CRITERIA_SPOT,
+   offers:["Pagamento à vista","Retirada no fornecedor","Flexibilidade no prazo","Lote maior nesta compra","Cadastro para compras futuras","Indicação a outras empresas do grupo"],
+   q1:["Qual o valor médio do Item/Serviço?","Valor médio pago ou orçado e quantidade por ano. Se for a primeira compra, registre isso.","Valor médio do Item/Serviço (R$)","Quantidade por ano","Última compra / observações","Ex.: março/2026, 20 unidades, fornecedor X. Ou: primeira compra"]}};
+const ACT=(b=S)=>CR(b).filter(c=>!c.removed).length;
+const tipoOf=(b=S)=>TIPOS[b&&b.tipo]||TIPOS.recorrente;
+const CR=(b=S)=>tipoOf(b).crit;
+const BATNAS=["","Outro fornecedor","Redução de escopo","Internalização","Novo BID","Extensão temporária do contrato","Manter contrato atual"];
+const STATUS=["Preparação","Em negociação","Aguardando fornecedor","Aprovação interna","Fechado","Cancelado"];
+const RISCOS=["Baixo","Médio","Alto"];
+
+/* ===================== UTILITÁRIOS ===================== */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const brl=v=>(+v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const pc=v=>v.toFixed(1).replace(".",",")+"%";
+const n1=v=>String(Math.round(v*10)/10).replace(".",",");
+const today=()=>new Date().toLocaleDateString("sv");
+const fmtD=d=>d?d.split("-").reverse().join("/"):"";
+const fmtDT=iso=>iso?new Date(iso).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"}):"";
+const clone=o=>JSON.parse(JSON.stringify(o));
+function parseBR(s){s=String(s??"").trim().replace(/R\$|\s/g,"");if(!s)return null;if(!/^[\d.,]+$/.test(s)||(s.match(/,/g)||[]).length>1)return NaN;
+  if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");else if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,"");
+  const v=parseFloat(s);return isNaN(v)?NaN:v;}
+const fmtIn=v=>v==null||v===""||isNaN(+v)?"":(+v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtPct=v=>v==null||v===""||isNaN(+v)?"":(+v).toLocaleString("pt-BR",{maximumFractionDigits:2});
+function toast(m){const el=$("toast");el.textContent=m;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),2200);}
+function banner(msg,type="err"){$("banner").innerHTML=msg?`<div class="banner ${type}">${msg}</div>`:"";}
+
+/* ===================== ARMAZENAMENTO ===================== */
+const CONFIGURED=!CONFIG.CLIENT_ID.startsWith("COLE");
+let msalApp=null,account=null,driveId=null;
+const LOCAL_KEY="squad-negociacao-local";
+const Store={
+  async init(){
+    if(!CONFIGURED){this.user="Modo local";return true;}
+    msalApp=new msal.PublicClientApplication({auth:{clientId:CONFIG.CLIENT_ID,authority:"https://login.microsoftonline.com/"+CONFIG.TENANT_ID,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+    if(msalApp.initialize)await msalApp.initialize();
+    const r=await msalApp.handleRedirectPromise();
+    account=r?.account||msalApp.getAllAccounts()[0]||null;
+    if(!account)return false;
+    this.user=account.name||account.username;
+    const site=await this.json(`/sites/${CONFIG.SP_HOSTNAME}:${CONFIG.SP_SITE_PATH}`);
+    if(CONFIG.LIBRARY_NAME){
+      const ds=await this.json(`/sites/${site.id}/drives`);
+      const d=ds.value.find(x=>x.name===CONFIG.LIBRARY_NAME);
+      if(!d)throw new Error(`Biblioteca "${CONFIG.LIBRARY_NAME}" não encontrada no site.`);
+      driveId=d.id;
+    }else driveId=(await this.json(`/sites/${site.id}/drive`)).id;
+    return true;
+  },
+  login(){msalApp.loginRedirect({scopes:CONFIG.SCOPES});},
+  logout(){msalApp.logoutRedirect({account});},
+  async token(){
+    try{return(await msalApp.acquireTokenSilent({scopes:CONFIG.SCOPES,account})).accessToken;}
+    catch(e){msalApp.acquireTokenRedirect({scopes:CONFIG.SCOPES,account});throw new Error("Sessão expirada. Redirecionando para login.");}
+  },
+  async req(path,opt={}){
+    const t=await this.token();
+    return fetch("https://graph.microsoft.com/v1.0"+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+t}});
+  },
+  async json(path){const r=await this.req(path);if(!r.ok)throw new Error(`Erro ${r.status} ao acessar ${path.split("?")[0]}`);return r.json();},
+  folder(){return CONFIG.FOLDER.split("/").map(encodeURIComponent).join("/");},
+  async list(){
+    if(!CONFIGURED){try{return JSON.parse(localStorage.getItem(LOCAL_KEY))||[];}catch(e){return[];}}
+    const r=await this.req(`/drives/${driveId}/root:/${this.folder()}:/children?$top=999`);
+    if(r.status===404)return[];
+    if(!r.ok)throw new Error(`Erro ${r.status} ao listar a pasta do SharePoint`);
+    const items=(await r.json()).value.filter(i=>i.file&&i.name.endsWith(".json"));
+    const out=await Promise.all(items.map(async i=>{
+      try{const d=await (await fetch(i["@microsoft.graph.downloadUrl"])).json();d._etag=i.eTag;return d;}catch(e){return null;}
+    }));
+    return out.filter(Boolean);
+  },
+  async save(b){
+    const body=JSON.stringify(b,(k,v)=>k.startsWith("_")?undefined:v,1);
+    if(!CONFIGURED){
+      const all=await this.list();const i=all.findIndex(x=>x.id===b.id);const d=JSON.parse(body);
+      if(i>=0)all[i]=d;else all.push(d);
+      try{localStorage.setItem(LOCAL_KEY,JSON.stringify(all));}catch(e){throw new Error("Não foi possível gravar no navegador.");}
+      return;
+    }
+    const h={"Content-Type":"application/json"};if(b._etag)h["If-Match"]=b._etag;
+    const r=await this.req(`/drives/${driveId}/root:/${this.folder()}/${encodeURIComponent(b.id)}.json:/content`,{method:"PUT",headers:h,body});
+    if(r.status===412)throw Object.assign(new Error("Outra pessoa salvou este BID enquanto você editava."),{conflict:true});
+    if(!r.ok)throw new Error(`Erro ${r.status} ao salvar no SharePoint`);
+    b._etag=(await r.json()).eTag;
+  },
+  async upload(bidId,file,onProg){
+    const stamp=new Date().toISOString().replace(/[-:T]/g,"").slice(0,14),safe=file.name.replace(/[\\/:*?"<>|#%]/g,"_");
+    if(!CONFIGURED){
+      if(file.size>1.5*1024*1024)throw new Error("No modo local de teste, anexos de até 1,5 MB. No SharePoint não há esse limite.");
+      const url=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error("Falha ao ler o arquivo"));r.readAsDataURL(file);});
+      onProg&&onProg(100);return{id:"local-"+stamp,url};
+    }
+    const path=`${this.folder()}/_anexos/${encodeURIComponent(bidId)}/${encodeURIComponent(stamp+"_"+safe)}`;
+    let item;
+    if(file.size<=4*1024*1024){
+      const r=await this.req(`/drives/${driveId}/root:/${path}:/content`,{method:"PUT",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
+      if(!r.ok)throw new Error(`Erro ${r.status} ao enviar ${file.name}`);item=await r.json();onProg&&onProg(100);
+    }else{
+      const s=await this.req(`/drives/${driveId}/root:/${path}:/createUploadSession`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({item:{"@microsoft.graph.conflictBehavior":"rename"}})});
+      if(!s.ok)throw new Error(`Erro ${s.status} ao iniciar o envio de ${file.name}`);
+      const up=(await s.json()).uploadUrl,CH=320*1024*16;
+      for(let st=0;st<file.size;st+=CH){
+        const en=Math.min(st+CH,file.size),r=await fetch(up,{method:"PUT",headers:{"Content-Range":`bytes ${st}-${en-1}/${file.size}`},body:file.slice(st,en)});
+        if(!r.ok&&r.status!==202)throw new Error(`Erro ${r.status} no envio de ${file.name}`);
+        onProg&&onProg(Math.round(en/file.size*100));
+        if(r.status===200||r.status===201)item=await r.json();
+      }
+    }
+    return{id:item.id,url:item.webUrl};
+  },
+  async listInd(){
+    if(!CONFIGURED){try{return JSON.parse(localStorage.getItem(LOCAL_KEY+"-ind"))||[];}catch(e){return[];}}
+    const r=await this.req(`/drives/${driveId}/root:/${this.folder()}/_indicadores:/children?$top=999`);
+    if(r.status===404)return[];if(!r.ok)return[];
+    const items=(await r.json()).value.filter(i=>i.file&&i.name.endsWith(".json"));
+    return(await Promise.all(items.map(async i=>{try{return await (await fetch(i["@microsoft.graph.downloadUrl"])).json();}catch(e){return null;}}))).filter(Boolean);
+  },
+  async saveInd(rec){
+    if(!CONFIGURED){const all=(await this.listInd()).filter(x=>x.mes!==rec.mes);all.push(rec);try{localStorage.setItem(LOCAL_KEY+"-ind",JSON.stringify(all));}catch(e){throw new Error("Não foi possível gravar no navegador.");}return;}
+    const r=await this.req(`/drives/${driveId}/root:/${this.folder()}/_indicadores/${rec.mes}.json:/content`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(rec,null,1)});
+    if(!r.ok)throw new Error(`Erro ${r.status} ao registrar o fechamento no SharePoint`);
+  }
+};
+
+/* ===================== MODELO ===================== */
+const blankBid=()=>({atual:null,qtdAno:null,hist:"",meta:null,obj:"",offer:[],offerTxt:"",batna:"",batnaTxt:""});
+function newBid(tipo="recorrente"){
+  const d=new Date(),id="BID-"+d.toLocaleDateString("sv").replace(/-/g,"")+"-"+Math.random().toString(36).slice(2,6).toUpperCase();
+  const now=d.toISOString();
+  return{id,tipo,deal:"",area:"",opt:{},bens:[],idx:[],ref:{},criadoEm:now,criadoPor:Store.user,atualizadoEm:now,atualizadoPor:Store.user,
+    sup:["Fornecedor A","Fornecedor B","Fornecedor C"],w:TIPOS[tipo].crit.map(c=>c.w),sc:TIPOS[tipo].crit.map(()=>[null,null,null]),price:[null,null,null],
+    bid:blankBid(),pn:{forn:-1,escopo:"",pgto:"",sla:"",risco:"Médio",status:"Preparação",acao:"",resp:"",prazo:"",comprador:CONFIGURED?Store.user:"",fechamento:""},
+    hist:[{em:now,por:Store.user,tipo:"a",texto:"BID criado ("+TIPOS[tipo].nome+")"}],_new:true};
+}
+let BIDS=[];const ATIVOS=()=>BIDS.filter(b=>!b.lixeira),LIXO=()=>BIDS.filter(b=>b.lixeira);let S=null;let saved=null;let dirty=false;let tab="prep";let view="painel";
+
+/* ===================== CÁLCULOS ===================== */
+const qtdAno=(b=S)=>{const q=parseInt(b.bid.qtdAno);return q>0?q:12;};
+const custoAnual=(b=S)=>+b.bid.atual>0?+b.bid.atual*qtdAno(b):null;
+const target=(b=S)=>{const a=+b.bid.atual,m=+b.bid.meta;return a>0&&m>0?a*(1-m/100):null;};
+const answered=(b=S)=>{const x=b.bid;return[+x.atual>0||(b.tipo==="esporadica"&&!!(x.hist||"").trim()),+x.meta>0||!!(x.obj||"").trim(),(x.offer||[]).length>0||!!(x.offerTxt||"").trim(),!!x.batna||!!(x.batnaTxt||"").trim()];};
+const QIDS=["q1","q3","q4","q5"];
+function priceScores(b=S){
+  const vals=b.price.map(p=>p>0?p:null),valid=vals.filter(v=>v!=null);
+  if(valid.length<2)return null;
+  const min=Math.min(...valid);
+  return vals.map(v=>v==null?null:Math.max(1,Math.round(5*min/v*10)/10));
+}
+function alignEv(b){
+  if(!b.opt||typeof b.opt!=="object")b.opt={};if(!Array.isArray(b.bens))b.bens=[];if(!Array.isArray(b.idx))b.idx=[];if(!b.ref||typeof b.ref!=="object")b.ref={};
+  const n=b.sup.length,fix=a=>{while(a.length<n)a.push(null);a.length=n;return a;};
+  Object.keys(b.opt).forEach(k=>{if(!Array.isArray(b.opt[k]))b.opt[k]=[];fix(b.opt[k]);});fix(b.bens);fix(b.idx);
+}
+function supSplice(b,i){alignEv(b);Object.values(b.opt).forEach(a=>a.splice(i,1));b.bens.splice(i,1);b.idx.splice(i,1);}
+function supPush(b){alignEv(b);Object.values(b.opt).forEach(a=>a.push(null));b.bens.push(null);b.idx.push(null);}
+const optId=(b,c,si)=>((b.opt||{})[c.k]||[])[si]||null;
+const optOf=(c,id)=>id?c.opts.find(o=>o[0]===id)||null:null;
+function bensList(b,si){const x=(b.bens||[])[si];if(!x)return[];return[...(x.sel||[]),...String(x.outros||"").split(",").map(s=>s.trim()).filter(Boolean)];}
+function bensScore(b,si){const x=(b.bens||[])[si];if(!x)return null;const n=bensList(b,si).length;if(!n&&!x.nenhum)return null;return n>=3?5:n===2?4:n===1?3:1;}
+function pgtoAuto(b,si){
+  const c=condOf(b,si);if(!c.parcelas)return null;const n=c.parcelas;
+  if(n>=11)return{s:5,why:`${n}x → nota 5`};if(n>=6)return{s:4,why:`${n}x → nota 4`};if(n>=2)return{s:3,why:`${n}x → nota 3`};
+  const tot=c.total??(+b.price[si]>0?+b.price[si]:null);
+  const others=b.sup.map((x,j)=>{if(j===si)return null;const o=condOf(b,j);return o.total??(+b.price[j]>0?+b.price[j]:null);}).filter(v=>v!=null);
+  if(!tot||!others.length)return{s:null,why:"à vista: falta valor de outro fornecedor para comparar (nota manual)"};
+  const avg=others.reduce((a,v)=>a+v,0)/others.length,d=(1-tot/avg)*100,s=d>=30?5:1;
+  return{s,why:d>=0?`à vista, ${pc(d)} abaixo da média dos outros → nota ${s}`:`à vista, ${pc(-d)} acima da média dos outros → nota 1`};
+}
+function score(ci,si,b=S){
+  const c=CR(b)[ci];if(!c||c.removed)return null;const old=(b.sc[ci]||[])[si]??null;
+  if(c.price){const p=priceScores(b);if(p)return p[si];return old;}
+  if(c.kind==="pgto"){const a=pgtoAuto(b,si);return a&&a.s!=null?a.s:old;}
+  if(c.kind==="opts"){const o=optOf(c,optId(b,c,si));return o?o[2]:old;}
+  if(c.kind==="bens"){const s=bensScore(b,si);return s!=null?s:old;}
+  return old;
+}
+function evLabel(b,flag,si){
+  if(si<0)return"";const c=CR(b).find(x=>x[flag]&&!x.removed);if(!c)return"";
+  if(c.kind==="opts"){const o=optOf(c,optId(b,c,si));return o?o[1]:"";}
+  if(c.kind==="bens")return bensList(b,si).join(", ")||(((b.bens||[])[si]||{}).nenhum?"Nenhum":"");
+  return"";
+}
+const hasCrit=(b,flag)=>CR(b).some(x=>x[flag]&&!x.removed);
+const idxOf=(b,si)=>si>=0&&hasCrit(b,"idx")?String((b.idx||[])[si]||"").trim():"";
+function compute(b=S){
+  return b.sup.map((n,si)=>{let got=0,max=0,done=0;
+    CR(b).forEach((c,ci)=>{const s=score(ci,si,b),w=+b.w[ci]||0;if(s!=null){got+=w*s;max+=w*5;done++;}});
+    return{n,si,pct:max?got/max*100:null,done};});
+}
+const ranked=(b=S)=>compute(b).filter(x=>x.pct!=null).sort((a,c)=>c.pct-a.pct);
+function gapsFor(si,b=S){
+  const list=[];
+  CR(b).forEach((c,ci)=>{const s=score(ci,si,b),w=+b.w[ci]||0;if(s==null||s>=4.5||!w)return;
+    let best=null;b.sup.forEach((n,oi)=>{if(oi===si)return;const o=score(ci,oi,b);if(o!=null&&o>s&&(!best||o>best.v))best={n,v:o};});
+    list.push({c,s,imp:w*(5-s),best});});
+  return list.sort((a,c)=>c.imp-a.imp).slice(0,4);
+}
+const batnaText=(b=S)=>[b.bid.batna,b.bid.batnaTxt.trim()].filter(Boolean).join(": ");
+function chosen(b=S){const i=+b.pn.forn;if(i>=0&&i<b.sup.length)return i;const t=ranked(b)[0];if(t)return t.si;
+  let bi=-1;b.price.forEach((p,k)=>{if(+p>0&&(bi<0||+p<+b.price[bi]))bi=k;});return bi;}
+const isOpen=b=>!["Fechado","Cancelado"].includes(b.pn.status);
+const MOEDAS=[["BRL","BRL – Real"],["USD","USD – Dólar"],["EUR","EUR – Euro"],["GBP","GBP – Libra"]];
+const UNIDADES=["meses","anos","dias"];
+const fmtM=(v,m)=>{try{return(+v).toLocaleString("pt-BR",{style:"currency",currency:m||"BRL"});}catch(e){return brl(v);}};
+const LEG=["tempo","tempoUn","moeda","parcelas","parcela","primeiroPgto"];
+function ensureCond(b){
+  if(!Array.isArray(b.cond)){
+    b.cond=b.sup.map(()=>({}));
+    if(LEG.some(k=>b.pn[k]!=null&&b.pn[k]!=="")){const i=Math.max(0,chosen(b));LEG.forEach(k=>{if(b.pn[k]!=null&&b.pn[k]!=="")b.cond[i][k]=b.pn[k];});}
+  }
+  LEG.forEach(k=>delete b.pn[k]);
+  while(b.cond.length<b.sup.length)b.cond.push({});b.cond.length=b.sup.length;
+  return b.cond;
+}
+function condOf(b,i){if(i<0)return cond({pn:{}},null);ensureCond(b);return cond({pn:b.cond[i]||{}},+b.price[i]>0?+b.price[i]:null);}
+const condStr=c=>[c.parcelas?(c.parcelas>1?`${c.parcelas}x de ${c.parcela?fmtM(c.parcela,c.moeda):"—"}`:`à vista${c.parcela?" "+fmtM(c.parcela,c.moeda):""}`):"",c.primeiroPgto?"1º em "+fmtD(c.primeiroPgto):"",c.tempo?"contrato "+c.tempo:"",c.moeda!=="BRL"?c.moeda:""].filter(Boolean).join(" · ");
+function cond(b,prop){
+  const pn=b.pn,moeda=pn.moeda||"BRL",np=parseInt(pn.parcelas)>0?parseInt(pn.parcelas):null,pv=+pn.parcela>0?+pn.parcela:null;
+  const par=pv||(np&&prop&&moeda==="BRL"?Math.round(prop/np*100)/100:null);
+  let ult="";if(pn.primeiroPgto&&np){const[y,m,d]=pn.primeiroPgto.split("-").map(Number),dt=new Date(y,m-1+np-1,1);dt.setDate(Math.min(d,new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate()));ult=dt.toLocaleDateString("sv");}
+  return{tempo:+pn.tempo>0?`${+pn.tempo} ${pn.tempoUn||"meses"}`:"",moeda,parcelas:np,parcela:par,parcelaAuto:!pv&&!!par,primeiroPgto:pn.primeiroPgto||"",ultimo:ult,total:np&&par?np*par:null};
+}
+function rowOf(b){
+  ensureCond(b);alignEv(b);const si=chosen(b),sc=ci=>{if(si<0)return"";const s=score(ci,si,b);return s==null?"":"Nota "+n1(s)+"/5";};
+  const atual=+b.bid.atual>0?+b.bid.atual:null,prop=si>=0&&+b.price[si]>0?+b.price[si]:null,t=target(b);
+  return{id:b.id,tipo:tipoOf(b).nome,tipoKey:b.tipo||"recorrente",nome:b.deal||"(sem nome)",forn:si>=0?b.sup[si]:"",escopo:b.pn.escopo||b.deal,atual,prop,target:t,
+    saving:atual&&prop?atual-prop:null,savingPct:atual&&prop?(atual-prop)/atual*100:null,area:b.area||"",
+    gar:evLabel(b,"gar",si),bensTxt:evLabel(b,"bens",si),idxTxt:idxOf(b,si),multa:evLabel(b,"multa",si),slaFaixa:evLabel(b,"sla",si),
+    cc:condOf(b,si),pgto:b.pn.pgto||(()=>{const c=condOf(b,si);return c.parcelas?(c.parcelas>1?`${c.parcelas}x de ${c.parcela?fmtM(c.parcela,c.moeda):"—"}`:`À vista${c.parcela?" "+fmtM(c.parcela,c.moeda):""}`):"";})()||sc(CR(b).findIndex(c=>c.pgto)),
+    sla:[evLabel(b,"sla",si),b.pn.sla].filter(Boolean).join(" · ")||sc(CR(b).findIndex(c=>c.sla)),
+    risco:b.pn.risco,status:b.pn.status,acao:b.pn.acao,resp:b.pn.resp,prazo:b.pn.prazo,open:isOpen(b),
+    comprador:b.pn.comprador||"",anexos:(b.files||[]).reduce((a,x)=>a+(x?x.length:0),0),fechamento:b.pn.status==="Fechado"?(b.pn.fechamento||""):"",
+    mesIni:b.criadoEm?new Date(b.criadoEm).toLocaleDateString("sv").slice(0,7):"",
+    mesFech:b.pn.status==="Fechado"&&b.pn.fechamento?b.pn.fechamento.slice(0,7):"",
+    ciclo:b.pn.status==="Fechado"&&b.pn.fechamento&&b.criadoEm?Math.max(0,Math.round((new Date(b.pn.fechamento+"T12:00")-new Date(new Date(b.criadoEm).toLocaleDateString("sv")+"T12:00"))/864e5)):null,
+    noPrazo:b.pn.status==="Fechado"&&b.pn.fechamento&&b.pn.prazo?b.pn.fechamento<=b.pn.prazo:null,
+    metaOk:b.pn.status==="Fechado"&&t&&prop?prop<=t:null,prep5:answered(b).every(Boolean)};
+}
+function snapshot(b){const r=rowOf(b);const ev={};CR(b).forEach(c=>{if(c.removed||!c.ev)return;b.sup.forEach((n,i)=>{const flag=c.sla?"sla":c.gar?"gar":c.bens?"bens":"multa";ev[`${c.ev} de ${n}`]=evLabel(b,flag,i);});});
+  if(hasCrit(b,"idx"))b.sup.forEach((n,i)=>{ev[`Índice de reajuste de ${n}`]=idxOf(b,i);});
+  return{ev,area:r.area,qtd:b.bid.qtdAno?String(parseInt(b.bid.qtdAno)||""):"",ref:+((b.ref||{}).valor)>0?brl(b.ref.valor)+(b.ref.fonte?" ("+b.ref.fonte+")":""):"",tipo:r.tipo,nome:r.nome,forn:r.forn,prop:r.prop,atual:r.atual,status:r.status,risco:r.risco,acao:r.acao,resp:r.resp,prazo:r.prazo,comprador:r.comprador,fechamento:b.pn.fechamento||"",
+  conds:Object.fromEntries(b.sup.map((n,i)=>[n,(()=>{const c=b.cond[i]||{};return LEG.some(k=>c[k]!=null&&c[k]!=="")?condStr(condOf(b,i))||"preenchido":"";})()])),
+  meta:b.bid.meta,rank:ranked(b).map(x=>x.n+" "+pc(x.pct)).join(", "),prep:answered(b).filter(Boolean).length};}
+function diffs(a,b){
+  const out=[],lbl={tipo:"Tipo",nome:"Nome",area:"Área solicitante",forn:"Fornecedor",prop:"Proposta",atual:"Valor médio",qtd:"Quantidade por ano",ref:"Referência de mercado",status:"Status",risco:"Risco",acao:"Observações",resp:"Responsável",comprador:"Comprador",fechamento:"Data de fechamento",prazo:"Prazo",meta:"Meta de redução"};
+  const f=(k,v)=>v==null||v===""?"vazio":k==="prop"||k==="atual"?brl(v):k==="parcela"?fmtM(v,b._m):k==="prazo"||k==="fechamento"||k==="primeiroPgto"?fmtD(v):k==="meta"?n1(v)+"%":v;
+  Object.keys(lbl).forEach(k=>{if((a[k]??"")!==(b[k]??""))out.push(`${lbl[k]}: ${f(k,a[k])} → ${f(k,b[k])}`);});
+  const ca=a.conds||{},cb=b.conds||{};Object.keys(cb).forEach(n=>{if((ca[n]||"")!==(cb[n]||""))out.push(`Condições de ${n}: ${ca[n]||"vazio"} → ${cb[n]||"vazio"}`);});
+  const ea=a.ev||{},eb=b.ev||{};Object.keys(eb).forEach(k=>{if((ea[k]||"")!==(eb[k]||""))out.push(`${k}: ${ea[k]||"vazio"} → ${eb[k]||"vazio"}`);});
+  if(a.rank!==b.rank&&b.rank)out.push("Avaliação: "+b.rank);
+  if(a.prep!==b.prep)out.push(`Preparação: ${b.prep} de 4 perguntas respondidas`);
+  return out;
+}
+
+/* ===================== PAINEL ===================== */
+function renderTabs(){
+  if(view==="painel"){$("tabs").innerHTML=`<button role="tab" aria-selected="true">Painel executivo <span class="cnt">(${ATIVOS().length})</span></button>`;return;}
+  const n=answered().filter(Boolean).length;
+  $("tabs").innerHTML=`<button class="back" data-back="1">‹ Painel</button>
+   <button role="tab" data-tab="prep" aria-selected="${tab==="prep"}">Preparação <span class="cnt">(${n}/4)</span></button>
+   <button role="tab" data-tab="aval" aria-selected="${tab==="aval"}">Avaliação</button>
+   <button role="tab" data-tab="acomp" aria-selected="${tab==="acomp"}">Acompanhamento</button>`;
+}
+const buyers=()=>[...new Set(ATIVOS().map(b=>b.pn.comprador).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+const mesLbl=m=>{const [y,mm]=m.split("-");return new Date(+y,+mm-1,1).toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(". de ","/").replace(" de ","/");};
+const areasUsed=()=>[...new Set(ATIVOS().map(b=>b.area).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+function baseRows(){const ft=$("fTipo").value,fc=$("fComprador").value,fa=$("fArea").value;
+  return ATIVOS().map(rowOf).filter(r=>(!ft||r.tipoKey===ft)&&(!fc||(fc==="__sem"?!r.comprador:r.comprador===fc))&&(!fa||(fa==="__sem"?!r.area:r.area===fa)));}
+function fillFilters(){
+  const keep=(id,html)=>{const el=$(id),v=el.value;el.innerHTML=html;if([...el.options].some(o=>o.value===v))el.value=v;};
+  const meses=[...new Set(ATIVOS().map(rowOf).flatMap(r=>[r.mesIni,r.mesFech]).filter(Boolean))].sort().reverse();
+  keep("fMes",`<option value="">Todos os meses</option>`+meses.map(m=>`<option value="${m}">${mesLbl(m)}</option>`).join(""));
+  keep("fArea",`<option value="">Todas as áreas</option>`+areasUsed().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")+`<option value="__sem">Sem área</option>`);
+  keep("fComprador",`<option value="">Todos os compradores</option>`+buyers().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")+`<option value="__sem">Sem comprador</option>`);
+}
+function filteredRows(){
+  const f=$("fStatus").value,q=$("fBusca").value.trim().toLowerCase(),fm=$("fMes").value;
+  return baseRows().filter(r=>(!fm||r.mesIni===fm||r.mesFech===fm)&&(f==="abertas"?r.open:f==="todas"?true:r.status===f)&&
+    (!q||[r.nome,r.forn,r.escopo,r.resp,r.comprador,r.area].join(" ").toLowerCase().includes(q)))
+    .sort((a,b)=>(b.open-a.open)||((a.prazo||"9999")<(b.prazo||"9999")?-1:1));
+}
+function renderPainel(){
+  const rows=filteredRows();
+  const fm=$("fMes").value,all=baseRows().filter(r=>!fm||r.mesIni===fm||r.mesFech===fm);
+  const K=agg(all,fm);
+  let prevSv=0,prevAt=0;all.forEach(r=>{if(r.open&&r.saving!=null){prevSv+=r.saving;prevAt+=r.atual;}});
+  $("kpis").innerHTML=`<div class="kpi hl"><span>Saving fechado${fm?" em "+mesLbl(fm):""}</span><b>${brl(K.sv)}</b><span>${K.at?pc(K.sv/K.at*100)+" sobre o valor médio":"sem fechamentos"}</span></div>
+   <div class="kpi"><span>Saving previsto (em aberto)</span><b>${brl(prevSv)}</b><span>${prevAt?pc(prevSv/prevAt*100):"—"}</span></div>
+   <div class="kpi"><span>BIDs${fm?" iniciados":""}</span><b>${K.ini}</b><span>${K.spot} esporádicas · ${K.rec} recorrentes</span></div>
+   <div class="kpi"><span>Fechados</span><b>${K.fech}</b><span>${K.canc} cancelados</span></div>
+   <div class="kpi"><span>Meta atingida</span><b>${K.meta}</b></div>
+   <div class="kpi"><span>SLA no prazo</span><b>${K.sla}</b></div>
+   <div class="kpi"><span>Ciclo médio</span><b>${K.ciclo}</b></div>
+   <div class="kpi"><span>Em aberto · vencidos</span><b>${K.open} · <span class="${K.late?"no":""}" style="display:inline;font-size:inherit">${K.late}</span></b><span>${K.high} com risco alto</span></div>`;
+  $("pbody").innerHTML=rows.length?rows.map(r=>`<tr data-open="${esc(r.id)}" tabindex="0">
+    <td><strong>${esc(r.nome)}</strong>${r.anexos?` <span class="tag" title="Orçamentos anexados">📎 ${r.anexos}</span>`:""}</td><td>${r.tipoKey==="esporadica"?"Esporádica":"Recorrente"}</td><td>${esc(r.area)}</td><td>${esc(r.forn)}</td><td>${esc(r.escopo)}</td>
+    <td class="r">${r.atual?brl(r.atual):"—"}</td><td class="r">${r.prop?brl(r.prop):"—"}</td><td class="r">${r.target?brl(r.target):"—"}</td>
+    <td class="r sv ${r.saving==null?"":r.target?(r.prop<=r.target?"ok":"no"):(r.saving>=0?"ok":"no")}">${r.saving==null?"—":brl(r.saving)+`<small>${pc(r.savingPct)}${r.target?(r.prop<=r.target?" · no target":" · abaixo do target"):""}</small>`}</td>
+    <td>${esc(r.pgto)}</td><td>${esc(r.sla)}</td><td>${esc(r.gar)}</td><td>${esc(r.idxTxt)}</td><td>${esc(r.bensTxt)}</td>
+    <td class="risk-${r.risco}">${r.risco}</td><td><span class="st st-${r.status}">${r.status}</span></td>
+    <td title="${esc(r.acao)}">${esc(r.acao.length>80?r.acao.slice(0,80)+"…":r.acao)}</td><td>${esc(r.resp)}</td><td>${esc(r.comprador)}</td><td class="${r.open&&r.prazo&&r.prazo<today()?"late":""}">${fmtD(r.prazo)}</td><td>${fmtD(r.fechamento)}</td></tr>`).join("")
+    :`<tr><td colspan="21" class="empty" style="padding:18px;cursor:default">${ATIVOS().length?"Nenhum BID neste filtro.":"Nenhum BID ainda. Crie o primeiro em Novo BID."}</td></tr>`;
+  const t=rows.filter(r=>r.saving!=null);
+  $("pfoot").innerHTML=t.length?`<td colspan="5">Total do filtro</td><td class="r">${brl(t.reduce((a,r)=>a+r.atual,0))}</td><td class="r">${brl(t.reduce((a,r)=>a+r.prop,0))}</td><td></td><td class="r">${brl(t.reduce((a,r)=>a+r.saving,0))}</td><td colspan="12"></td>`:"";
+  renderCrono();renderMensal();renderTrash();
+  const feed=ATIVOS().flatMap(b=>(b.hist||[]).map(h=>({...h,id:b.id,nome:b.deal||"(sem nome)"}))).sort((a,b)=>a.em<b.em?1:-1).slice(0,25);
+  $("feed").innerHTML=feed.length?feed.map(h=>`<li><div class="when">${fmtDT(h.em)} · ${esc(h.por)}</div><a data-openlink="${esc(h.id)}">${esc(h.nome)}</a>: ${h.tipo==="c"?"💬 ":""}${esc(h.texto).replace(/\n/g,"; ")}</li>`).join(""):`<li class="empty">Sem movimentações ainda.</li>`;
+}
+
+const addM=(iso,k)=>{const[y,m,d]=iso.split("-").map(Number),dt=new Date(y,m-1+k,1);dt.setDate(Math.min(d,new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate()));return dt.toLocaleDateString("sv");};
+function cronograma(){
+  const ids=new Set(baseRows().map(r=>r.id)),out=[],miss=[];
+  BIDS.forEach(b=>{if(!ids.has(b.id)||b.pn.status!=="Fechado")return;const r=rowOf(b),si=chosen(b);if(si<0)return;
+    const c=condOf(b,si);
+    if(!c.parcelas||!c.primeiroPgto||!c.parcela){miss.push({id:b.id,nome:r.nome,falta:[!c.parcelas&&"parcelas",!c.parcela&&"valor da parcela",!c.primeiroPgto&&"data do 1º pagamento"].filter(Boolean).join(", ")});return;}
+    const np=c.parcelas,prop=+b.price[si]>0?+b.price[si]:null;
+    for(let k=0;k<np;k++){let v=c.parcela;if(c.parcelaAuto&&prop&&k===np-1)v=Math.round((prop-c.parcela*(np-1))*100)/100;
+      out.push({data:addM(c.primeiroPgto,k),id:b.id,nome:r.nome,tipo:r.tipoKey==="esporadica"?"Esporádica":"Recorrente",area:r.area,forn:r.forn,n:k+1,np,valor:v,moeda:c.moeda,conf:true,fech:b.pn.fechamento||"",comprador:r.comprador});}
+  });
+  return{lst:out.sort((a,b)=>a.data<b.data?-1:a.data>b.data?1:a.nome.localeCompare(b.nome)),miss};
+}
+function renderCrono(){
+  const{lst,miss}=cronograma(),per=$("pgPer").value,hoje=today();
+  const L=lst;
+  const lim={"30d":(()=>{const d=new Date();d.setDate(d.getDate()+30);return d.toLocaleDateString("sv");})(),"3m":addM(hoje,3),"6m":addM(hoje,6),"12m":addM(hoje,12)};
+  const P=L.filter(x=>per==="all"?true:per==="past"?x.data<hoje:x.data>=hoje&&x.data<lim[per]);
+  const sum=a=>a.filter(x=>x.moeda==="BRL").reduce((s,x)=>s+x.valor,0),mes=hoje.slice(0,7),fut=L.filter(x=>x.data>=hoje);
+  const outras=[...new Set(P.filter(x=>x.moeda!=="BRL").map(x=>x.moeda))];
+  $("pgKpis").innerHTML=`<div class="kpi hl"><span>A pagar em ${mesLbl(mes)}</span><b>${brl(sum(L.filter(x=>x.data.slice(0,7)===mes)))}</b><span>${L.filter(x=>x.data.slice(0,7)===mes).length} parcela(s)</span></div>
+   <div class="kpi"><span>Próximos 30 dias</span><b>${brl(sum(L.filter(x=>x.data>=hoje&&x.data<lim["30d"])))}</b></div>
+   <div class="kpi"><span>Próximos 12 meses</span><b>${brl(sum(L.filter(x=>x.data>=hoje&&x.data<lim["12m"])))}</b></div>
+   <div class="kpi"><span>Total futuro do cronograma</span><b>${brl(sum(fut))}</b><span>${fut.length} parcela(s) · ${new Set(fut.map(x=>x.id)).size} BID(s)</span></div>
+   <div class="kpi"><span>Parcelas já vencidas</span><b>${brl(sum(L.filter(x=>x.data<hoje)))}</b><span>${L.filter(x=>x.data<hoje).length} parcela(s)</span></div>`;
+  const meses=[...new Set(P.map(x=>x.data.slice(0,7)))].sort();
+  const md=meses.map(m=>{const a=P.filter(x=>x.data.slice(0,7)===m);return{m,c:sum(a.filter(x=>x.conf)),p:sum(a.filter(x=>!x.conf)),n:a.length};});
+  const mx=Math.max(1,...md.map(d=>d.c+d.p)),k=v=>v>=1000?"R$ "+n1(v/1000)+" mil":brl(v);
+  $("pgChart").innerHTML=md.length?md.map(d=>`<div class="mcol" title="${mesLbl(d.m)}: ${brl(d.c)}"><span class="v">${k(d.c+d.p)}</span>
+    <div style="display:flex;flex-direction:column-reverse;align-items:center"><div class="bar" style="height:${Math.round(d.c/mx*120)}px;border-radius:${d.p?0:"5px 5px 0 0"}"></div><div class="bar prev" style="height:${Math.round(d.p/mx*120)}px"></div></div>
+    <span class="l">${mesLbl(d.m)}</span><span class="l">${d.n} parc.</span></div>`).join("")
+    :`<span class="empty">Nenhuma parcela neste período.</span>`;
+  $("pgBody").innerHTML=P.length?P.map(x=>`<tr data-open="${esc(x.id)}" tabindex="0" class="${x.data<hoje?"venc":""}"><td><strong>${fmtD(x.data)}</strong></td><td>${esc(x.nome)}</td><td>${x.tipo}</td><td>${esc(x.area)}</td><td>${esc(x.forn)}</td><td class="r">${x.np===1?"À vista":x.n+"/"+x.np}</td><td class="r"><strong>${fmtM(x.valor,x.moeda)}</strong></td><td>${fmtD(x.fech)}</td><td>${esc(x.comprador)}</td></tr>`).join("")
+    :`<tr><td colspan="9" class="empty" style="cursor:default;padding:16px">Nenhuma parcela neste período. O cronograma mostra BIDs fechados cujo fornecedor escolhido tem parcelas, valor da parcela e data do 1º pagamento nas condições comerciais.</td></tr>`;
+  $("pgFoot").innerHTML=P.length?`<td colspan="6">Total do período (${P.length} parcela${P.length>1?"s":""})</td><td class="r">${brl(sum(P))}${outras.length?`<small style="display:block;font-weight:600;color:var(--muted)">+ valores em ${outras.join(", ")}</small>`:""}</td><td colspan="2"></td>`:"";
+  $("pgMiss").innerHTML=miss.length?`<div class="banner info"><strong>${miss.length} BID(s) fechado(s) com condições incompletas</strong>, fora do cronograma: ${miss.map(m=>`<a data-openlink="${esc(m.id)}" style="cursor:pointer;text-decoration:underline">${esc(m.nome)}</a> (falta ${m.falta})`).join("; ")}.</div>`:"";
+}
+function renderTrash(){
+  const L=LIXO().sort((a,b)=>(b.lixeira.em||"")<(a.lixeira.em||"")?-1:1);
+  $("trashCnt").textContent=L.length?`(${L.length})`:"";
+  $("trashBody").innerHTML=L.length?L.map(b=>{const r=rowOf(b);return`<tr style="cursor:default"><td><strong>${esc(r.nome)}</strong></td><td>${r.tipoKey==="esporadica"?"Esporádica":"Recorrente"}</td><td>${esc(r.area)}</td><td>${esc(r.forn)}</td><td>${esc(r.status)}</td><td>${fmtDT(b.lixeira.em)}</td><td>${esc(b.lixeira.por||"")}</td><td>${esc(b.lixeira.motivo||"—")}</td>
+    <td style="white-space:nowrap"><button class="btn" data-trview="${esc(b.id)}">Ver</button> <button class="btn primary" data-trrest="${esc(b.id)}">Restaurar</button></td></tr>`;}).join("")
+    :`<tr><td colspan="9" class="empty" style="cursor:default;padding:16px">A lixeira está vazia.</td></tr>`;
+}
+async function trashCurrent(){
+  if(S._new){if(!confirm("Este BID ainda não foi salvo. Descartar?"))return;setDirty(false);S=null;showView("painel");toast("BID descartado");return;}
+  const motivo=prompt(`Mover "${S.deal||S.id}" para a lixeira?\n\nInforme o motivo (opcional):`,"");if(motivo===null)return;
+  S.lixeira={em:new Date().toISOString(),por:Store.user,motivo:motivo.trim()};
+  (S._log=S._log||[]).push("Movido para a lixeira"+(motivo.trim()?`. Motivo: ${motivo.trim()}`:""));
+  await saveBid();if(dirty){S.lixeira=null;return;}
+  S=null;showView("painel");toast("BID movido para a lixeira");
+}
+async function restoreTrash(id){
+  if(dirty&&!confirm("Há alterações não salvas no BID aberto. Descartar?"))return;
+  openBid(id);if(!S||!S.lixeira)return;
+  S.lixeira=null;(S._log=S._log||[]).push("Restaurado da lixeira");
+  await saveBid();if(dirty)return;
+  S=null;showView("painel");toast("BID restaurado");
+}
+function agg(rows,mes){
+  const ini=rows.filter(r=>!mes||r.mesIni===mes),fe=rows.filter(r=>r.status==="Fechado"&&(!mes||r.mesFech===mes));
+  const sv=fe.filter(r=>r.saving!=null),at=sv.reduce((a,r)=>a+r.atual,0),s=sv.reduce((a,r)=>a+r.saving,0);
+  const pct=(arr)=>arr.length?pc(arr.filter(Boolean).length/arr.length*100)+` (${arr.filter(Boolean).length}/${arr.length})`:"—";
+  const cic=fe.map(r=>r.ciclo).filter(v=>v!=null),open=rows.filter(r=>r.open);
+  return{ini:ini.length,spot:ini.filter(r=>r.tipoKey==="esporadica").length,rec:ini.filter(r=>r.tipoKey!=="esporadica").length,
+    fech:fe.length,canc:ini.filter(r=>r.status==="Cancelado").length,sv:s,at,svN:s,
+    meta:pct(fe.map(r=>r.metaOk).filter(v=>v!=null)),sla:pct(fe.map(r=>r.noPrazo).filter(v=>v!=null)),
+    ciclo:cic.length?Math.round(cic.reduce((a,c)=>a+c,0)/cic.length)+" dias":"—",
+    prep:ini.length?pc(ini.filter(r=>r.prep5).length/ini.length*100):"—",
+    open:open.length,late:open.filter(r=>r.prazo&&r.prazo<today()).length,high:open.filter(r=>r.risco==="Alto").length};
+}
+let IND=[];
+function mesesBase(){return[...new Set(baseRows().flatMap(r=>[r.mesIni,r.mesFech]).filter(Boolean))].sort();}
+function renderMensal(){
+  const rows=baseRows(),meses=mesesBase().reverse(),fm=$("fMes").value;
+  const data=meses.map(m=>({m,...agg(rows,m)}));
+  const max=Math.max(1,...data.map(d=>Math.abs(d.sv)));
+  $("mChart").innerHTML=data.length?[...data].reverse().map(d=>`<div class="mcol" title="${mesLbl(d.m)}: ${brl(d.sv)}"><span class="v">${d.sv?(Math.abs(d.sv)>=1000?"R$ "+n1(d.sv/1000)+" mil":brl(d.sv)):"—"}</span>
+    <div class="bar ${d.sv<0?"neg":""}" style="height:${Math.round(Math.abs(d.sv)/max*120)}px"></div><span class="l">${mesLbl(d.m)}</span><span class="l">${d.fech} fech.</span></div>`).join("")
+    :`<span class="empty">Os indicadores aparecem quando houver BIDs.</span>`;
+  $("mBody").innerHTML=data.length?data.map(d=>{const reg=IND.find(x=>x.mes===d.m);
+    return`<tr style="cursor:default${d.m===fm?";background:var(--amber-soft)":""}"><td><strong>${mesLbl(d.m)}</strong></td><td class="r">${d.ini}</td><td class="r">${d.spot}</td><td class="r">${d.rec}</td><td class="r">${d.fech}</td><td class="r">${d.canc}</td>
+    <td class="r ${d.sv>=0?"ok":"no"}"><strong>${brl(d.sv)}</strong></td><td class="r">${d.at?pc(d.sv/d.at*100):"—"}</td><td>${d.meta}</td><td>${d.sla}</td><td class="r">${d.ciclo}</td><td class="r">${d.prep}</td>
+    <td>${reg?`${fmtDT(reg.em)} por ${esc(reg.por)}<small style="display:block;color:var(--muted)">saving registrado ${brl(reg.sv)}</small>`:"—"}</td></tr>`;}).join("")
+    :`<tr><td colspan="13" class="empty" style="cursor:default">Sem dados.</td></tr>`;
+  const fmRows=rows.filter(r=>!fm||r.mesIni===fm||r.mesFech===fm);
+  const names=[...new Set(fmRows.map(r=>r.comprador||"Sem comprador"))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  $("cTitle").textContent="Por comprador"+(fm?" em "+mesLbl(fm):"");
+  $("cBody").innerHTML=names.length?names.map(n=>{const k=agg(fmRows.filter(r=>(r.comprador||"Sem comprador")===n),fm);
+    return`<tr style="cursor:default"><td><strong>${esc(n)}</strong></td><td class="r">${k.ini}</td><td class="r">${k.open}</td><td class="r">${k.fech}</td><td class="r ${k.sv>=0?"ok":"no"}"><strong>${brl(k.sv)}</strong></td><td class="r">${k.at?pc(k.sv/k.at*100):"—"}</td><td>${k.meta}</td><td>${k.sla}</td><td class="r">${k.ciclo}</td><td class="r ${k.late?"late":""}">${k.late}</td></tr>`;}).join("")
+    :`<tr><td colspan="10" class="empty" style="cursor:default">Sem dados.</td></tr>`;
+  const areas=[...new Set(fmRows.map(r=>r.area||"Sem área"))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  $("aTitle").textContent="Por área solicitante"+(fm?" em "+mesLbl(fm):"");
+  $("aBody").innerHTML=areas.length?areas.map(n=>{const k=agg(fmRows.filter(r=>(r.area||"Sem área")===n),fm);
+    return`<tr style="cursor:default"><td><strong>${esc(n)}</strong></td><td class="r">${k.ini}</td><td class="r">${k.open}</td><td class="r">${k.fech}</td><td class="r ${k.sv>=0?"ok":"no"}"><strong>${brl(k.sv)}</strong></td><td class="r">${k.at?pc(k.sv/k.at*100):"—"}</td><td>${k.meta}</td><td>${k.sla}</td><td class="r">${k.ciclo}</td><td class="r ${k.late?"late":""}">${k.late}</td></tr>`;}).join("")
+    :`<tr><td colspan="10" class="empty" style="cursor:default">Sem dados.</td></tr>`;
+  $("regMes").textContent="Registrar fechamento de "+mesLbl(fm||today().slice(0,7));
+}
+
+/* ===================== BID: RENDER ===================== */
+function renderBidForm(){
+  const b=S.bid;alignEv(S);
+  $("dealName").value=S.deal||"";
+  $("bidArea").value=S.area||"";
+  $("areasList").innerHTML=[...new Set([...AREAS,...areasUsed()])].map(a=>`<option value="${esc(a)}">`).join("");
+  ["hist","obj","offerTxt","batnaTxt"].forEach(k=>{$("b_"+k).value=b[k]??"";});
+  $("b_atual").value=fmtIn(b.atual);$("b_meta").value=fmtPct(b.meta);$("b_qtdAno").value=b.qtdAno??"";
+  $("b_batna").innerHTML=BATNAS.map(o=>`<option value="${esc(o)}" ${b.batna===o?"selected":""}>${o||"Selecione"}</option>`).join("");
+  const T=tipoOf();$("bidTipo").value=S.tipo||"recorrente";
+  ["q1t","q1p","q1a","q1b","q1c"].forEach((id,i)=>$(id).textContent=T.q1[i]);$("b_hist").placeholder=T.q1[5];
+  $("offerChips").innerHTML=[...new Set([...T.offers,...(b.offer||[])])].map(o=>`<label class="chip"><input type="checkbox" data-offer="${esc(o)}" ${(b.offer||[]).includes(o)?"checked":""}>${o}</label>`).join("");
+  const R=S.ref;$("ref_termo").value=R.termo||"";$("ref_valor").value=fmtIn(R.valor);$("ref_fonte").value=R.fonte||"";
+  renderBidCalc();
+}
+function refTerm(){return(S.ref.termo||S.deal||"").trim();}
+function renderRef(){
+  const t=refTerm(),e=encodeURIComponent(t);$("ref_termo").placeholder=S.deal||"Digite o item ou serviço";
+  const L=[["Google Shopping",`https://www.google.com/search?tbm=shop&q=${e}`],["Mercado Livre",`https://lista.mercadolivre.com.br/${encodeURIComponent(t.replace(/\s+/g,"-"))}`],["Buscapé",`https://www.buscape.com.br/search?q=${e}`],["Zoom",`https://www.zoom.com.br/search?q=${e}`],["Google (serviços)",`https://www.google.com/search?q=${encodeURIComponent(t+" preço")}`]];
+  $("refLinks").innerHTML=t?L.map(([n,u])=>`<a class="btn" href="${u}" target="_blank" rel="noopener">🔎 ${n}</a>`).join(""):`<span class="calc">Dê um nome ao BID ou digite o termo para pesquisar.</span>`;
+  const R=S.ref,v=+R.valor>0?+R.valor:null,at=+S.bid.atual>0?+S.bid.atual:null,pr=S.price.filter(x=>+x>0).map(Number),best=pr.length?Math.min(...pr):null,out=[];
+  if(v){
+    if(at)out.push(`Valor médio <strong>${pc(Math.abs(at/v-1)*100)} ${at>=v?"acima":"abaixo"}</strong> da referência (${brl(Math.abs(at-v))})`);
+    if(best)out.push(`Melhor proposta <strong>${pc(Math.abs(best/v-1)*100)} ${best>=v?"acima":"abaixo"}</strong> da referência`);
+    if(R.em)out.push(`registrada em ${fmtDT(R.em)} por ${esc(R.por||"")}`);
+  }
+  $("refCalc").innerHTML=out.join(" · ");
+}
+function renderBidCalc(){
+  const a=answered(),n=a.filter(Boolean).length;
+  $("pips").innerHTML=a.map(x=>`<span class="pip ${x?"on":""}"></span>`).join("");
+  $("progTxt").innerHTML=`<strong>${n} de 4</strong> perguntas respondidas${n<4?" · o BID ainda não está pronto para a mesa":" · BID pronto para negociação"}`;
+  a.forEach((x,i)=>$(QIDS[i]).classList.toggle("done",x));
+  const ca=custoAnual();$("anualCalc").innerHTML=ca?`${brl(ca)}<small>${fmtIn(S.bid.atual)} × ${qtdAno()}</small>`:"—";
+  const t=target();
+  $("targetCalc").innerHTML=t?`Target: <strong>${brl(t)}</strong>`:(+S.bid.meta>0?"Informe o valor médio na pergunta 1 para calcular o target":"");
+  renderRef();
+}
+function ensureFiles(b=S){if(!Array.isArray(b.files))b.files=[];while(b.files.length<b.sup.length)b.files.push([]);b.files.length=b.sup.length;return b.files;}
+const kb=n=>n>=1048576?n1(n/1048576)+" MB":Math.max(1,Math.round(n/1024))+" KB";
+const UPL={};
+function renderSuppliers(){
+  const F=ensureFiles();
+  $("suppliers").innerHTML=S.sup.map((n,i)=>`<div class="supcard"><div class="sup"><span class="dot" style="background:${COLORS[i]}"></span>
+  <input value="${esc(n)}" data-i="${i}" aria-label="Nome do fornecedor ${i+1}">
+  ${S.sup.length>2?`<button class="icon" data-del="${i}" aria-label="Remover ${esc(n)}">×</button>`:""}</div>
+  ${F[i].length?`<ul class="files">${F[i].map((f,j)=>`<li><span aria-hidden="true">📎</span><a href="${esc(f.url)}" target="_blank" rel="noopener" ${f.url.startsWith("data:")?`download="${esc(f.nome)}"`:""} title="${esc(f.nome)} · enviado em ${fmtDT(f.em)} por ${esc(f.por)}">${esc(f.nome)}</a><small>${kb(f.tam)}</small><button class="icon" data-rmfile="${i}:${j}" aria-label="Remover anexo ${esc(f.nome)}">×</button></li>`).join("")}</ul>`:""}
+  ${UPL[i]?`<div class="upl">${esc(UPL[i])}</div>`:""}
+  <label class="attach"><input type="file" multiple data-upl="${i}" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.doc,.msg,.eml,.txt,.zip">📎 Anexar orçamento</label></div>`).join("");
+  $("addSup").disabled=S.sup.length>=5;
+}
+function guideHtml(c){
+  if(c.kind==="opts")return c.opts.map(o=>`<dt>${o[2]}</dt><dd>${o[1]}</dd>`).join("");
+  if(c.kind==="pgto")return`<dt>5</dt><dd>11 parcelas ou mais, ou à vista com total 30%+ abaixo da média dos outros fornecedores</dd><dt>4</dt><dd>6 a 10 parcelas</dd><dt>3</dt><dd>2 a 5 parcelas</dd><dt>1</dt><dd>À vista com desconto menor que 30%</dd><dt>—</dt><dd>Sem parcelas informadas: nota manual</dd>`;
+  if(c.kind==="bens")return`<dt>5</dt><dd>3 ou mais benefícios</dd><dt>4</dt><dd>2 benefícios</dd><dt>3</dt><dd>1 benefício</dd><dt>1</dt><dd>Nenhum benefício</dd>`;
+  if(c.idx)return`<dt>1</dt><dd>${c.g[0]}</dd><dt>3</dt><dd>${c.g[1]}</dd><dt>5</dt><dd>${c.g[2]}</dd><dt>Dica</dt><dd>Índice oficial com teto = nota alta; reajuste livre ou indefinido = nota baixa.</dd>`;
+  return`<dt>1</dt><dd>${c.g[0]}</dd><dt>3</dt><dd>${c.g[1]}</dd><dt>5</dt><dd>${c.g[2]}</dd>`;
+}
+const usedIdx=()=>[...new Set([...INDICES,...BIDS.flatMap(b=>b.idx||[]).filter(Boolean)])];
+const usedBens=()=>[...new Set(BIDS.flatMap(b=>(b.bens||[]).flatMap(x=>x?String(x.outros||"").split(",").map(s=>s.trim()):[])).filter(Boolean))];
+function starBtns(ci,si,cur,dis,lbl){return`<div class="seg" role="group" aria-label="${esc(lbl)}">${[1,2,3,4,5].map(v=>`<button data-c="${ci}" data-s="${si}" data-v="${v}" aria-pressed="${cur===v}" ${dis?"disabled":""}>${v}</button>`).join("")}</div>`;}
+let RENDERING=false;
+function refreshAuto(){
+  const ps=priceScores();
+  CR().forEach((c,ci)=>{if(c.removed||!(c.price||c.kind==="pgto"))return;S.sup.forEach((n,si)=>{let cur,dis,info;
+    if(c.price){dis=!!ps;cur=dis?Math.round(ps[si]??0):((S.sc[ci]||[])[si]??null);info=dis&&ps[si]!=null?`nota ${n1(ps[si])}`:"";}
+    else{const a=pgtoAuto(S,si);dis=!!(a&&a.s!=null);cur=dis?a.s:((S.sc[ci]||[])[si]??null);info=a?a.why:"sem parcelas: informe em Acompanhamento › Condições comerciais";}
+    document.querySelectorAll(`button[data-c="${ci}"][data-s="${si}"]`).forEach(bt=>{bt.disabled=dis;bt.setAttribute("aria-pressed",String(+bt.dataset.v===cur));});
+    const el=$(`ai_${ci}_${si}`);if(el)el.textContent=info;});});
+}
+function renderCriteria(){RENDERING=true;try{renderCriteria0();}finally{RENDERING=false;}}
+function renderCriteria0(){
+  const ps=priceScores();alignEv(S);
+  $("criteria").innerHTML=`<datalist id="idxList">${usedIdx().map(x=>`<option value="${esc(x)}">`).join("")}</datalist><datalist id="bensList">${usedBens().map(x=>`<option value="${esc(x)}">`).join("")}</datalist>`+
+  CR().map((c,ci)=>c.removed?"":`<div class="crit">
+   <div class="crit-head"><div><h3>${c.t}</h3><div class="q">${c.q}</div></div>
+   <div class="weight"><label for="w${ci}">Peso</label><input id="w${ci}" type="number" min="0" max="100" inputmode="numeric" value="${S.w[ci]}" data-w="${ci}"></div></div>
+   <details class="guide"><summary>Como dar a nota</summary><dl>${guideHtml(c)}</dl></details>
+   <div class="scores">${S.sup.map((n,si)=>{
+     const old=(S.sc[ci]||[])[si]??null,lbl=`Nota de ${n} em ${c.t}`;let ctl="",info="";
+     if(c.price){const auto=!!ps;ctl=`<span class="price"><input class="money" type="text" inputmode="decimal" placeholder="Valor R$" value="${fmtIn(S.price[si])}" data-p="${si}" aria-label="Valor da proposta de ${esc(n)}" autocomplete="off"></span>`+starBtns(ci,si,auto?Math.round(ps[si]??0):old,auto,lbl);
+       if(auto&&ps[si]!=null)info=`nota ${n1(ps[si])}`;}
+     else if(c.kind==="pgto"){const a=pgtoAuto(S,si),auto=a&&a.s!=null;ctl=starBtns(ci,si,auto?a.s:old,auto,lbl);
+       info=a?a.why:"sem parcelas: informe em Acompanhamento › Condições comerciais";}
+     else if(c.kind==="opts"){const id=optId(S,c,si);ctl=`<div class="seg opts" role="group" aria-label="${esc(lbl)}">${c.opts.map(o=>`<button data-oc="${ci}" data-os="${si}" data-ov="${o[0]}" aria-pressed="${id===o[0]}" title="nota ${o[2]}">${o[1]}</button>`).join("")}</div>`;
+       info=id?`nota ${optOf(c,id)[2]}`:old!=null?`nota anterior: ${old}`:"";}
+     else if(c.kind==="bens"){const x=S.bens[si]||{},sel=x.sel||[],sc=bensScore(S,si);
+       ctl=`<div class="bwrap">${BENS.map(o=>`<button class="bchip" data-bs="${si}" data-bo="${esc(o)}" aria-pressed="${sel.includes(o)}">${o}</button>`).join("")}<button class="bchip" data-bs="${si}" data-bnone="1" aria-pressed="${!!x.nenhum&&!bensList(S,si).length}">Nenhum</button><input data-bout="${si}" list="bensList" placeholder="Outros (separe por vírgula)" value="${esc(x.outros||"")}" aria-label="Outros benefícios de ${esc(n)}" style="flex:1 1 180px"></div>`;
+       info=sc!=null?`${bensList(S,si).length} benefício(s) → nota ${sc}`:old!=null?`nota anterior: ${old}`:"";}
+     else{ctl=(c.idx?`<span class="idxin">Índice <input data-idx="${si}" list="idxList" value="${esc((S.idx||[])[si]||"")}" placeholder="Escolha ou digite" aria-label="Índice de reajuste de ${esc(n)}" style="width:190px"></span>`:"")+starBtns(ci,si,old,false,lbl);}
+     return `<div class="srow"><span class="name"><span class="dot" style="width:10px;height:10px;background:${COLORS[si]}"></span>${esc(n)}</span>${ctl}<span class="auto" id="ai_${ci}_${si}">${esc(info)}</span></div>`}).join("")}</div></div>`).join("");
+  $("wsum").textContent=CR().reduce((a,c,i)=>a+(c.removed?0:(+S.w[i]||0)),0);
+}
+function verdictText(){
+  const done=ranked();
+  if(!done.length)return{h:"Comece pontuando as propostas",p:"As notas aparecem aqui assim que você avaliar o primeiro critério."};
+  const top=done[0],sec=done[1];let h,p;const t=target(),pr=+S.price[top.si];
+  if(top.pct>=80){h=`Siga com ${top.n}`;p="Proposta forte. Feche ajustando os pontos finais abaixo antes de assinar.";}
+  else if(top.pct>=60){h=`${top.n} lidera, mas negocie mais`;p="Proposta aceitável. Leve os pontos fracos para a mesa antes de fechar.";}
+  else{h="Nenhuma proposta está boa o suficiente";p=batnaText()?`Acione o BATNA: ${batnaText()}.`:"Considere reabrir a concorrência. Defina o BATNA na preparação do BID.";}
+  if(t&&pr>0&&pr>t)p+=` O preço de ${top.n} ainda está acima do target, então há espaço para pedir mais.`;
+  if(sec&&top.pct-sec.pct<5)p+=` Empate técnico com ${sec.n} (diferença de ${n1(top.pct-sec.pct)} pontos): use um contra o outro como alavanca.`;
+  if(done.some(x=>x.done<ACT()))p+=" Ainda há critérios sem nota, então o resultado pode mudar.";
+  const miss=answered().filter(x=>!x).length;
+  if(miss)p+=` A preparação do BID tem ${miss} pergunta${miss>1?"s":""} sem resposta.`;
+  return{h,p};
+}
+function factsHtml(dark=true){
+  const r=rowOf(S),out=[];
+  if(r.saving!=null)out.push(`<div class="${dark?"fact":"kpi"}"><span>Saving (${esc(r.forn)})</span><b class="${r.saving>=0?"ok":"no"}">${pc(r.savingPct)}</b><span>${brl(r.saving)} sobre ${brl(r.atual)}</span></div>`);
+  if(r.target)out.push(`<div class="${dark?"fact":"kpi"}"><span>Target (meta ${n1(+S.bid.meta)}%)</span><b>${brl(r.target)}</b>${r.prop?`<span class="${r.prop<=r.target?"ok":"no"}">${r.prop<=r.target?"Meta atingida":"Faltam "+brl(r.prop-r.target)}</span>`:""}</div>`);
+  const rv=+((S.ref||{}).valor)>0?+S.ref.valor:null;
+  if(rv)out.push(`<div class="${dark?"fact":"kpi"}"><span>Referência de mercado (consulta)</span><b>${brl(rv)}</b><span>${r.prop?`Proposta ${r.prop<=rv?"abaixo":"acima"} em ${pc(Math.abs(r.prop/rv-1)*100)}`:r.atual?`Valor médio ${r.atual<=rv?"abaixo":"acima"} em ${pc(Math.abs(r.atual/rv-1)*100)}`:esc(S.ref.fonte||"")}</span></div>`);
+  if(batnaText())out.push(`<div class="${dark?"fact":"kpi"}"><span>BATNA</span><b style="font-size:1rem">${esc(S.bid.batna||"Definido")}</b></div>`);
+  return out.join("");
+}
+function renderResult(){
+  const v=verdictText();
+  $("verdict").innerHTML=`<div class="verdict"><strong>${esc(v.h)}</strong>${esc(v.p)}</div>`;
+  $("facts").innerHTML=factsHtml(true);
+  const r=compute(),sorted=[...r].sort((a,b)=>(b.pct??-1)-(a.pct??-1));
+  $("bars").innerHTML=sorted.map(x=>`<div><div class="bar-top"><span>${esc(x.n)}</span><span class="pct">${x.pct==null?"—":pc(x.pct)}</span></div>
+   <div class="track"><div class="fill" style="width:${x.pct??0}%;background:${COLORS[x.si]}"></div></div>
+   <div class="meta">${x.done} de ${ACT()} critérios avaliados${S.price[x.si]>0?" · proposta "+brl(+S.price[x.si]):""}</div></div>`).join("");
+  $("gaps").innerHTML=S.sup.map((n,si)=>{const g=gapsFor(si);
+    return `<div class="gap" style="border-left-color:${COLORS[si]}"><h3>${esc(n)}</h3>${g.length?`<ul>${g.map(x=>`<li><strong>${x.c.t}</strong> <span class="tag">nota ${n1(x.s)}</span><br>Buscar: ${x.c.g[2].toLowerCase()}.${x.best?` Argumento: ${esc(x.best.n)} oferece nota ${n1(x.best.v)}.`:""}</li>`).join("")}</ul>`:`<p class="empty">${r[si].done?"Sem pontos fracos relevantes nos critérios avaliados.":"Avalie os critérios para ver os pontos a negociar."}</p>`}</div>`;}).join("");
+  const b=S.bid,tr=[b.offer.join(", "),b.offerTxt.trim()].filter(Boolean).join(". ");
+  $("trade").innerHTML=tr?`<div class="trade"><strong>Moedas de troca disponíveis:</strong> ${esc(tr)}. Só conceda em troca de algo dos pontos acima.</div>`:"";
+}
+function renderAcomp(){
+  const top=ranked()[0];
+  $("p_forn").innerHTML=`<option value="-1">${top?"Melhor nota: "+esc(top.n):"Automático (melhor nota)"}</option>`+S.sup.map((n,i)=>`<option value="${i}" ${+S.pn.forn===i?"selected":""}>${esc(n)}</option>`).join("");
+  $("p_risco").innerHTML=RISCOS.map(o=>`<option ${S.pn.risco===o?"selected":""}>${o}</option>`).join("");
+  $("p_status").innerHTML=STATUS.map(o=>`<option ${S.pn.status===o?"selected":""}>${o}</option>`).join("");
+  ["escopo","pgto","sla","acao","resp","prazo","comprador","fechamento"].forEach(k=>$("p_"+k).value=S.pn[k]??"");
+  $("compradores").innerHTML=buyers().map(n=>`<option value="${esc(n)}">`).join("");
+  const r=rowOf(S);
+  $("p_pgto").placeholder=r.pgto&&!S.pn.pgto?r.pgto+" (da avaliação)":"ex.: 60 dias";
+  $("p_sla").placeholder=r.sla&&!S.pn.sla?r.sla+" (da avaliação)":"ex.: 98% no prazo, multa 2%";
+  $("acSummary").innerHTML=factsHtml(false)||`<div class="kpi"><span>Saving</span><b>—</b><span>Informe o valor médio e a proposta</span></div>`;
+  const si=chosen(S),go=`<a data-golink="aval">alterar na Avaliação</a>`,ro=(id,v,empty)=>{$(id).innerHTML=v?`${esc(v)}<small>${go}</small>`:`<span style="font-weight:400;color:var(--muted)">${empty}</span><small>${go}</small>`;};
+  ro("ro_sla",evLabel(S,"sla",si),"Faixa ainda não escolhida");ro("ro_gar",evLabel(S,"gar",si),"Faixa ainda não escolhida");
+  ro("ro_bens",evLabel(S,"bens",si),"Nenhum benefício marcado");
+  if(hasCrit(S,"idx"))ro("ro_idx",idxOf(S,si),"Índice não informado");else $("ro_idx").innerHTML=`<span style="font-weight:400;color:var(--muted)">Não se aplica a compra esporádica</span>`;
+  renderCond();renderHist();
+}
+function renderCond(){
+  ensureCond(S);
+  $("ccBody").innerHTML=S.sup.map((n,i)=>{const d=S.cond[i],pr=+S.price[i]>0?+S.price[i]:null;
+    return`<tr id="cc_tr_${i}"><td style="min-width:170px"><span class="dot" style="width:10px;height:10px;background:${COLORS[i]};margin-right:6px"></span><strong>${esc(n)}</strong><span id="cc_sel_${i}"></span></td>
+    <td class="r">${pr?brl(pr):"—"}</td>
+    <td style="min-width:200px"><div style="display:flex;gap:4px"><input type="number" min="0" step="1" inputmode="numeric" data-cc="${i}" data-ck="tempo" value="${esc(d.tempo??"")}" aria-label="Tempo de contrato de ${esc(n)}"><select data-cc="${i}" data-ck="tempoUn" aria-label="Unidade" style="max-width:104px;flex:none">${UNIDADES.map(u=>`<option ${(d.tempoUn||"meses")===u?"selected":""}>${u}</option>`).join("")}</select></div></td>
+    <td style="min-width:95px"><select data-cc="${i}" data-ck="moeda" aria-label="Moeda de ${esc(n)}">${MOEDAS.map(([k])=>`<option ${(d.moeda||"BRL")===k?"selected":""}>${k}</option>`).join("")}</select></td>
+    <td style="min-width:95px"><input type="number" min="1" step="1" inputmode="numeric" data-cc="${i}" data-ck="parcelas" value="${esc(d.parcelas??"")}" aria-label="Parcelas de ${esc(n)}"></td>
+    <td style="min-width:140px"><input class="money" type="text" inputmode="decimal" autocomplete="off" data-cc="${i}" data-ck="parcela" id="cc_par_${i}" value="${fmtIn(d.parcela)}" aria-label="Valor da parcela de ${esc(n)}"></td>
+    <td style="min-width:150px"><input type="date" data-cc="${i}" data-ck="primeiroPgto" value="${esc(d.primeiroPgto??"")}" aria-label="Primeiro pagamento de ${esc(n)}"></td>
+    <td class="calcv" id="cc_ult_${i}"></td><td class="calcv" id="cc_tot_${i}"></td>
+    <td>${esc(evLabel(S,"sla",i)||"—")}</td><td>${esc(evLabel(S,"gar",i)||"—")}</td><td style="min-width:160px">${esc(evLabel(S,"bens",i)||"—")}</td><td>${esc(idxOf(S,i)||"—")}</td><td>${esc(evLabel(S,"multa",i)||"—")}</td></tr>`;}).join("");
+  updateCond();
+}
+function updateCond(){
+  const si=chosen(S),C=S.sup.map((n,i)=>condOf(S,i));
+  const has=C.map((c,i)=>c.parcelas||c.parcela||c.primeiroPgto||c.tempo);
+  const best=(f,dir)=>{const v=C.map((c,i)=>has[i]?f(c,i):null);const ok=v.filter(x=>x!=null);if(ok.length<2)return-1;const t=dir>0?(ok.reduce((a,b)=>a>b?a:b)):(ok.reduce((a,b)=>a<b?a:b));return v.filter(x=>x===t).length===ok.length?-1:v.indexOf(t);};
+  const bP=best(c=>c.parcelas,1),bV=best(c=>c.moeda==="BRL"?c.parcela:null,-1),bD=best(c=>c.primeiroPgto||null,1),bT=best(c=>c.moeda==="BRL"?c.total:null,-1);
+  const star=t=>`<span class="star">${t}</span>`;
+  C.forEach((c,i)=>{
+    $("cc_tr_"+i).className=i===si?"sel":"";$("cc_sel_"+i).innerHTML=i===si?`<span class="tag">escolhido</span>`:"";
+    $("cc_par_"+i).placeholder=c.parcelaAuto?"≈ "+(+c.parcela).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):"";$("cc_par_"+i).title=c.parcelaAuto?"Sugerido: proposta ÷ parcelas":"";
+    $("cc_ult_"+i).innerHTML=c.ultimo&&c.parcelas>1?fmtD(c.ultimo)+`<small>parcelas mensais</small>`:"—";
+    const pr=+S.price[i]>0?+S.price[i]:null;let t="—";
+    if(c.total!=null){let s="";if(c.moeda!=="BRL")s="confira o câmbio";else if(pr){const d=c.total-pr;s=Math.abs(d)<0.05*Math.max(1,c.parcelas)?"confere com a proposta":`${d>0?"acima":"abaixo"} em ${brl(Math.abs(d))}`;}
+      t=fmtM(c.total,c.moeda)+(i===bT?star("menor total"):"")+(s?`<small>${s}</small>`:"");}
+    $("cc_tot_"+i).innerHTML=t;
+  });
+  const L=[];
+  if(bP>=0)L.push(`<li><strong>Mais parcelas:</strong> ${esc(S.sup[bP])} (${C[bP].parcelas}x)</li>`);
+  if(bV>=0)L.push(`<li><strong>Menor parcela:</strong> ${esc(S.sup[bV])} (${fmtM(C[bV].parcela,C[bV].moeda)})</li>`);
+  if(bD>=0)L.push(`<li><strong>Primeiro pagamento mais tarde:</strong> ${esc(S.sup[bD])} (${fmtD(C[bD].primeiroPgto)})</li>`);
+  if(bT>=0)L.push(`<li><strong>Menor total parcelado:</strong> ${esc(S.sup[bT])} (${brl(C[bT].total)})</li>`);
+  $("ccHl").innerHTML=L.length?`<ul class="hl-list">${L.join("")}</ul>`:"";
+  $("ccTitle").textContent="Fornecedor escolhido"+(si>=0?": "+S.sup[si]:"");
+  renderCondCards();
+}
+function renderCondCards(){
+  const r=rowOf(S),c=r.cc,card=(t,v,s="",cls="")=>`<div class="kpi"><span>${t}</span><b class="${cls}" style="font-size:1.2rem">${v}</b>${s?`<span>${s}</span>`:""}</div>`;
+  let conf="";
+  if(c.total!=null){
+    if(c.moeda!=="BRL")conf=card("Total parcelado",fmtM(c.total,c.moeda),"Proposta registrada em R$: confira o câmbio");
+    else if(r.prop){const d=c.total-r.prop;conf=card("Total parcelado",fmtM(c.total,c.moeda),Math.abs(d)<0.05*Math.max(1,c.parcelas)?"Confere com a proposta":`${d>0?"Acima":"Abaixo"} da proposta em ${brl(Math.abs(d))}`,Math.abs(d)<0.05*Math.max(1,c.parcelas)?"ok":"no");}
+    else conf=card("Total parcelado",fmtM(c.total,c.moeda));
+  }
+  $("ccCards").innerHTML=
+    card("Tempo de contrato",c.tempo||"—")+
+    card("Tipo de moeda",c.moeda)+
+    card("Qtd. de parcelas",c.parcelas?(c.parcelas===1?"1 (à vista)":c.parcelas):"—")+
+    card("Valor da parcela",c.parcela?fmtM(c.parcela,c.moeda):"—",c.parcelaAuto?"Sugerido: proposta ÷ parcelas":"")+
+    card("Primeiro pagamento",c.primeiroPgto?fmtD(c.primeiroPgto):"—",c.ultimo&&c.parcelas>1?`Último previsto: ${fmtD(c.ultimo)} (parcelas mensais)`:"")+conf;
+}
+function renderHist(){
+  const h=[...(S.hist||[])].reverse();
+  $("hist").innerHTML=h.length?h.map(x=>`<li class="${x.tipo}"><div class="when">${fmtDT(x.em)} · ${esc(x.por)}${x.tipo==="c"?" · comentário":""}</div><div class="txt">${esc(x.texto)}</div></li>`).join(""):`<li class="empty">Sem registros.</li>`;
+}
+function renderTrashBanner(){$("trashBanner").innerHTML=S&&S.lixeira?`<div class="banner trash"><span>🗑 Este BID está na lixeira desde ${fmtDT(S.lixeira.em)}, por ${esc(S.lixeira.por||"")}${S.lixeira.motivo?` · motivo: ${esc(S.lixeira.motivo)}`:""}.</span><button class="btn primary" data-trrest="${esc(S.id)}">Restaurar</button></div>`:"";$("trashBtn").hidden=!!(S&&S.lixeira);$("trashBtn").textContent=S&&S._new?"🗑 Descartar BID novo":"🗑 Mover para a lixeira";}
+function renderMeta(){renderTrashBanner();$("bidMeta").textContent=`${S.id} · criado em ${fmtDT(S.criadoEm)} por ${S.criadoPor} · última gravação ${fmtDT(S.atualizadoEm)} por ${S.atualizadoPor}`;}
+function renderBid(){renderBidForm();renderSuppliers();renderCriteria();renderResult();renderAcomp();renderMeta();renderTabs();}
+
+/* ===================== NAVEGAÇÃO ===================== */
+function setDirty(v=true){dirty=v;$("savebar").hidden=!v;}
+function showView(v){
+  view=v;$("vPainel").hidden=v!=="painel";$("vBid").hidden=v!=="bid";
+  if(v==="painel"){fillFilters();renderPainel();}
+  renderTabs();window.scrollTo({top:0});
+}
+function showTab(t){tab=t;["prep","aval","acomp"].forEach(id=>$(id).hidden=id!==t);if(t==="acomp")renderAcomp();if(t==="aval"){renderCriteria();renderResult();}if(t==="prep")renderBidCalc();renderTabs();window.scrollTo({top:0});}
+function openBid(id){
+  const b=BIDS.find(x=>x.id===id);if(!b)return;ensureCond(b);alignEv(b);
+  S=clone(b);delete S._log;S._etag=b._etag;saved=snapshot(b);setDirty(false);
+  renderBid();showView("bid");showTab("prep");
+}
+function leaveBid(){if(dirty&&!confirm("Há alterações não salvas. Sair e descartar?"))return;setDirty(false);S=null;showView("painel");}
+
+/* ===================== SALVAR ===================== */
+async function saveBid(extra){
+  const now=new Date().toISOString();
+  const snap=snapshot(S);const ch=S._new?[]:diffs(saved,snap);
+  S.hist=S.hist||[];
+  const lg=[...ch,...(S._log||[])];
+  if(lg.length)S.hist.push({em:now,por:Store.user,tipo:"a",texto:lg.join("\n")});
+  if(extra)S.hist.push({em:now,por:Store.user,tipo:"c",texto:extra});
+  S.atualizadoEm=now;S.atualizadoPor=Store.user;
+  $("saveBtn").disabled=true;$("saveTxt").textContent="Salvando…";
+  try{
+    const wasNew=S._new;delete S._new;
+    await Store.save(S);
+    const i=BIDS.findIndex(x=>x.id===S.id),copy=clone(S);delete copy._log;copy._etag=S._etag;
+    if(i>=0)BIDS[i]=copy;else BIDS.push(copy);
+    S._log=[];saved=snap;setDirty(false);renderMeta();renderHist();renderTabs();toast(wasNew?"BID criado e salvo":"BID salvo");
+  }catch(e){
+    if(lg.length)S.hist.pop();if(extra)S.hist.pop();
+    if(e.conflict){banner(`${esc(e.message)} Toque em <strong>Descartar</strong> para recarregar a versão atual e refaça suas alterações.`);}
+    else banner(esc(e.message));
+    $("saveTxt").textContent="Não foi possível salvar";
+  }finally{$("saveBtn").disabled=false;}
+}
+
+/* ===================== EVENTOS ===================== */
+document.addEventListener("click",e=>{
+  const tr=e.target.closest("tr[data-open]");if(tr){openBid(tr.dataset.open);return;}
+  const a=e.target.closest("[data-openlink]");if(a){openBid(a.dataset.openlink);return;}
+  const gl=e.target.closest("[data-golink]");if(gl){showTab(gl.dataset.golink);return;}
+  const tv=e.target.closest("[data-trview]");if(tv){openBid(tv.dataset.trview);return;}
+  const tr2=e.target.closest("[data-trrest]");if(tr2){restoreTrash(tr2.dataset.trrest);return;}
+  const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.back)leaveBid();
+  else if(b.dataset.tab)showTab(b.dataset.tab);
+  else if(b.dataset.go)showTab(b.dataset.go);
+  else if(b.dataset.v){const ci=+b.dataset.c,si=+b.dataset.s,v=+b.dataset.v;S.sc[ci][si]=S.sc[ci][si]===v?null:v;setDirty();renderCriteria();renderResult();}
+  else if(b.dataset.oc!=null){const c=CR()[+b.dataset.oc],si=+b.dataset.os;alignEv(S);if(!S.opt[c.k])S.opt[c.k]=S.sup.map(()=>null);S.opt[c.k][si]=S.opt[c.k][si]===b.dataset.ov?null:b.dataset.ov;setDirty();renderCriteria();renderResult();}
+  else if(b.dataset.bs!=null){const si=+b.dataset.bs;alignEv(S);const x=S.bens[si]||(S.bens[si]={sel:[],outros:"",nenhum:false});
+    if(b.dataset.bnone){x.nenhum=!x.nenhum;if(x.nenhum){x.sel=[];x.outros="";}}else{const o=b.dataset.bo;x.sel=x.sel.includes(o)?x.sel.filter(y=>y!==o):[...x.sel,o];x.nenhum=false;}
+    setDirty();renderCriteria();renderResult();}
+  else if(b.dataset.rmfile){const[i,j]=b.dataset.rmfile.split(":").map(Number),f=ensureFiles()[i][j];if(!f||!confirm(`Tirar "${f.nome}" deste BID? O arquivo continua guardado no SharePoint.`))return;
+    S.files[i].splice(j,1);(S._log=S._log||[]).push(`Anexo removido de ${S.sup[i]}: ${f.nome}`);setDirty();renderSuppliers();}
+  else if(b.dataset.del!=null){if(!confirm("Remover este fornecedor e suas notas? Os orçamentos anexados continuam guardados no SharePoint."))return;const i=+b.dataset.del;ensureFiles();supSplice(S,i);
+    if(S.files[i].length)(S._log=S._log||[]).push(`Fornecedor ${S.sup[i]} removido com ${S.files[i].length} anexo(s)`);S.files.splice(i,1);ensureCond(S);S.cond.splice(i,1);S.sup.splice(i,1);S.sc.forEach(r=>r.splice(i,1));S.price.splice(i,1);
+    if(+S.pn.forn===i)S.pn.forn=-1;else if(+S.pn.forn>i)S.pn.forn--;setDirty();renderBid();}
+});
+document.addEventListener("keydown",e=>{const tr=e.target.closest&&e.target.closest("tr[data-open]");if(tr&&e.key==="Enter")openBid(tr.dataset.open);});
+$("addSup").onclick=()=>{if(S.sup.length>=5)return;ensureFiles();ensureCond(S);supPush(S);S.sup.push("Fornecedor "+String.fromCharCode(65+S.sup.length));S.files.push([]);S.cond.push({});S.sc.forEach(r=>r.push(null));S.price.push(null);setDirty();renderSuppliers();renderCriteria();renderResult();};
+$("resetW").onclick=()=>{S.w=CR().map(c=>c.w);setDirty();renderCriteria();renderResult();toast("Pesos padrão restaurados");};
+function startNew(tipo){if(dirty&&!confirm("Há alterações não salvas. Descartar?"))return;S=newBid(tipo);saved=snapshot(S);setDirty(true);renderBid();showView("bid");showTab("prep");$("dealName").focus();}
+$("newBid").onclick=()=>startNew("recorrente");$("newSpot").onclick=()=>startNew("esporadica");
+$("fTipo").onchange=()=>renderPainel();
+$("bidTipo").onchange=e=>{const t=e.target.value;if(t===(S.tipo||"recorrente"))return;
+  if(ranked().length&&!confirm("Mudar o tipo troca os critérios e apaga as notas já dadas (os preços são mantidos). Continuar?")){e.target.value=S.tipo||"recorrente";return;}
+  S.tipo=t;S.w=TIPOS[t].crit.map(c=>c.w);S.sc=TIPOS[t].crit.map(()=>S.sup.map(()=>null));S.opt={};S.bens=S.sup.map(()=>null);S.idx=S.sup.map(()=>null);setDirty();renderBid();toast("Critérios de "+TIPOS[t].nome.toLowerCase()+" aplicados");};
+$("reload").onclick=()=>loadAll();
+$("trashBtn").onclick=()=>trashCurrent();
+$("trashOpen").onclick=()=>{const s=$("trashSec");s.hidden=!s.hidden;if(!s.hidden){renderTrash();s.scrollIntoView({behavior:"smooth",block:"start"});}};
+$("bkDown").onclick=()=>{
+  const data={ferramenta:"Squad de Negociação",geradoEm:new Date().toISOString(),por:Store.user,bids:BIDS.map(b=>JSON.parse(JSON.stringify(b,(k,v)=>k.startsWith("_")?undefined:v))),indicadores:IND};
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:"application/json"}));
+  a.download=`backup-squad-negociacao-${today()}.json`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+  toast(`Backup com ${BIDS.length} BID(s) baixado`);
+};
+$("bkUp").onchange=async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  let data;try{data=JSON.parse(await f.text());}catch(err){banner("Arquivo de backup inválido.");return;}
+  const list=Array.isArray(data)?data:data.bids;if(!Array.isArray(list)||!list.every(b=>b&&b.id&&b.sup)){banner("Arquivo de backup inválido.");return;}
+  const novos=list.filter(b=>!BIDS.some(x=>x.id===b.id)),exist=list.length-novos.length;
+  const over=exist&&confirm(`O backup tem ${list.length} BID(s): ${novos.length} novo(s) e ${exist} que já existe(m).\n\nOK = restaurar tudo, substituindo os existentes pela versão do backup.\nCancelar = restaurar só os novos.`);
+  const alvo=over?list:novos;if(!alvo.length){toast("Nada novo para restaurar");return;}
+  banner(`Restaurando ${alvo.length} BID(s)…`,"info");let ok=0;
+  for(const b of alvo){const cur=BIDS.find(x=>x.id===b.id),c=JSON.parse(JSON.stringify(b));if(cur)c._etag=cur._etag;
+    (c.hist=c.hist||[]).push({em:new Date().toISOString(),por:Store.user,tipo:"a",texto:"Restaurado a partir de backup"});
+    try{await Store.save(c);ok++;}catch(err){banner(esc(err.message));}}
+  await loadAll();toast(`${ok} BID(s) restaurado(s)`);
+};
+$("pgPer").onchange=renderCrono;
+$("copyPg").onclick=()=>{const{lst}=cronograma(),per=$("pgPer").value,hoje=today();
+  const lim={"30d":(()=>{const d=new Date();d.setDate(d.getDate()+30);return d.toLocaleDateString("sv");})(),"3m":addM(hoje,3),"6m":addM(hoje,6),"12m":addM(hoje,12)};
+  const P=lst.filter(x=>(per==="all"?true:per==="past"?x.data<hoje:x.data>=hoje&&x.data<lim[per]));
+  const c=s=>String(s??"").replace(/[\t\n]/g," "),f=v=>String(Math.round(v*100)/100).replace(".",",");
+  copyText([["VENCIMENTO","BID","TIPO","ÁREA SOLICITANTE","FORNECEDOR","PARCELA","VALOR","MOEDA","FECHADO EM","COMPRADOR"].join("\t"),...P.map(x=>[fmtD(x.data),c(x.nome),x.tipo,c(x.area),c(x.forn),x.np===1?"À vista":x.n+"/"+x.np,f(x.valor),x.moeda,fmtD(x.fech),c(x.comprador)].join("\t"))].join("\n"),"Cronograma copiado. Cole no Excel");};
+$("fStatus").onchange=renderPainel;$("fArea").onchange=renderPainel;$("fBusca").oninput=renderPainel;$("fMes").onchange=renderPainel;$("fComprador").onchange=renderPainel;
+$("copyInd").onclick=()=>{
+  const rows=baseRows(),H=["MÊS","BIDS INICIADOS","ESPORÁDICAS","RECORRENTES","FECHADOS","CANCELADOS","SAVING FECHADO","SAVING %","META ATINGIDA","SLA NO PRAZO","CICLO MÉDIO","PREPARAÇÃO 4/4"];
+  const f=v=>String(Math.round(v*100)/100).replace(".",",");
+  const L=mesesBase().reverse().map(m=>{const d=agg(rows,m);return[mesLbl(m),d.ini,d.spot,d.rec,d.fech,d.canc,f(d.sv),d.at?f(d.sv/d.at*100):"",d.meta,d.sla,d.ciclo,d.prep].join("\t");});
+  const fm=$("fMes").value,fmRows=rows.filter(r=>!fm||r.mesIni===fm||r.mesFech===fm);
+  const C=[...new Set(fmRows.map(r=>r.comprador||"Sem comprador"))].map(n=>{const k=agg(fmRows.filter(r=>(r.comprador||"Sem comprador")===n),fm);return[n,k.ini,k.open,k.fech,f(k.sv),k.at?f(k.sv/k.at*100):"",k.meta,k.sla,k.ciclo,k.late].join("\t");});
+  copyText([H.join("\t"),...L,"",["COMPRADOR"+(fm?" ("+mesLbl(fm)+")":""),"BIDS INICIADOS","EM ABERTO","FECHADOS","SAVING FECHADO","SAVING %","META ATINGIDA","SLA NO PRAZO","CICLO MÉDIO","PRAZOS VENCIDOS"].join("\t"),...C,"",["ÁREA SOLICITANTE"+(fm?" ("+mesLbl(fm)+")":""),"BIDS INICIADOS","EM ABERTO","FECHADOS","SAVING FECHADO","SAVING %","META ATINGIDA","SLA NO PRAZO","CICLO MÉDIO","PRAZOS VENCIDOS"].join("\t"),
+    ...[...new Set(fmRows.map(r=>r.area||"Sem área"))].map(n=>{const k=agg(fmRows.filter(r=>(r.area||"Sem área")===n),fm);return[n,k.ini,k.open,k.fech,f(k.sv),k.at?f(k.sv/k.at*100):"",k.meta,k.sla,k.ciclo,k.late].join("\t");})].join("\n"),"Indicadores copiados. Cole no Excel");
+};
+$("regMes").onclick=async()=>{
+  const m=$("fMes").value||today().slice(0,7),all=ATIVOS().map(rowOf),d=agg(all,m);
+  const ex=IND.find(x=>x.mes===m);
+  if(!confirm(`${ex?"Substituir o registro existente de":"Registrar o fechamento de"} ${mesLbl(m)} com saving fechado de ${brl(d.sv)}?`))return;
+  const comp={};[...new Set(all.map(r=>r.comprador||"Sem comprador"))].forEach(n=>{const k=agg(all.filter(r=>(r.comprador||"Sem comprador")===n),m);if(k.ini||k.fech)comp[n]={iniciados:k.ini,fechados:k.fech,saving:k.sv,meta:k.meta,sla:k.sla,ciclo:k.ciclo};});
+  const rec={mes:m,em:new Date().toISOString(),por:Store.user,sv:d.sv,iniciados:d.ini,esporadicas:d.spot,recorrentes:d.rec,fechados:d.fech,cancelados:d.canc,
+    savingPct:d.at?d.sv/d.at*100:null,meta:d.meta,sla:d.sla,ciclo:d.ciclo,preparacao:d.prep,compradores:comp,
+    bids:all.filter(r=>r.mesFech===m).map(r=>({id:r.id,nome:r.nome,tipo:r.tipo,area:r.area,fornecedor:r.forn,atual:r.atual,proposta:r.prop,saving:r.saving,comprador:r.comprador}))};
+  try{await Store.saveInd(rec);IND=IND.filter(x=>x.mes!==m);IND.push(rec);renderMensal();toast("Fechamento de "+mesLbl(m)+" registrado");}catch(e){banner(esc(e.message));}
+};
+$("saveBtn").onclick=()=>saveBid();
+$("discard").onclick=async()=>{if(!confirm("Descartar as alterações deste BID?"))return;const id=S.id,wasNew=S._new;setDirty(false);banner("");await loadAll();if(!wasNew&&BIDS.some(b=>b.id===id))openBid(id);else showView("painel");};
+$("addCmt").onclick=()=>{const t=$("cmt").value.trim();if(!t){toast("Escreva o comentário primeiro");return;}$("cmt").value="";saveBid(t);};
+$("dealName").oninput=e=>{S.deal=e.target.value;setDirty();renderRef();};
+$("bidArea").oninput=e=>{S.area=e.target.value.trim();setDirty();};
+document.addEventListener("change",async e=>{
+  const t=e.target;if(!S)return;
+  if(t.dataset.upl!=null){
+    const i=+t.dataset.upl,files=[...t.files];t.value="";if(!files.length)return;
+    const bid=S;let ok=0;
+    for(const f of files){
+      UPL[i]=`Enviando ${f.name}…`;renderSuppliers();
+      try{const r=await Store.upload(bid.id,f,p=>{UPL[i]=`Enviando ${f.name}… ${p}%`;if(S===bid)renderSuppliers();});
+        ensureFiles(bid)[i].push({nome:f.name,tam:f.size,id:r.id,url:r.url,em:new Date().toISOString(),por:Store.user});
+        (bid._log=bid._log||[]).push(`Orçamento anexado em ${bid.sup[i]}: ${f.name}`);ok++;
+      }catch(err){banner(esc(err.message));}
+    }
+    delete UPL[i];if(S===bid){setDirty();renderSuppliers();}
+    if(ok)toast(`${ok} orçamento(s) anexado(s). Salve o BID para registrar.`);
+    return;
+  }
+  if(t.dataset.i!=null){S.sup[+t.dataset.i]=t.value.trim()||"Fornecedor";setDirty();renderBid();}
+  if(t.dataset.offer){const o=t.dataset.offer;S.bid.offer=t.checked?[...S.bid.offer,o]:S.bid.offer.filter(x=>x!==o);setDirty();renderBidCalc();renderResult();renderTabs();}
+  if(t.dataset.pn&&t.tagName==="SELECT"){S.pn[t.dataset.pn]=t.dataset.pn==="forn"?+t.value:t.value;if(t.dataset.pn==="status"&&t.value==="Fechado"&&!S.pn.fechamento){S.pn.fechamento=today();toast("Data de fechamento preenchida com hoje");}setDirty();renderAcomp();}
+});
+document.addEventListener("input",e=>{
+  const t=e.target;if(!S)return;
+  if(t.dataset.w!=null){S.w[+t.dataset.w]=Math.max(0,Math.min(100,+t.value||0));setDirty();$("wsum").textContent=S.w.reduce((a,b)=>a+(+b||0),0);renderResult();}
+  const num=()=>{const v=parseBR(t.value);if(Number.isNaN(v)){t.classList.add("bad");return undefined;}t.classList.remove("bad");return v>0?v:null;};
+  if(t.dataset.p!=null){const v=num();if(v===undefined)return;S.price[+t.dataset.p]=v;setDirty();refreshAuto();renderResult();}
+  if(t.dataset.b){const k=t.dataset.b;let v=t.value;
+    if(k==="atual"||k==="meta"){v=num();if(v===undefined)return;if(k==="meta"&&v>100){t.classList.add("bad");return;}}
+    else if(k==="qtdAno"){const d=t.value.replace(/\D/g,"");if(d!==t.value)t.value=d;v=d?parseInt(d):null;}
+    S.bid[k]=v;setDirty();renderBidCalc();renderTabs();}
+  if(t.dataset.ref){const k=t.dataset.ref;alignEv(S);if(k==="valor"){const v=num();if(v===undefined)return;S.ref.valor=v;}else S.ref[k]=t.value;
+    if(k!=="termo"){S.ref.em=new Date().toISOString();S.ref.por=Store.user;}setDirty();renderRef();}
+  if(t.dataset.idx!=null){alignEv(S);S.idx[+t.dataset.idx]=t.value;setDirty();renderResult();}
+  if(t.dataset.bout!=null){const si=+t.dataset.bout;alignEv(S);const x=S.bens[si]||(S.bens[si]={sel:[],outros:"",nenhum:false});x.outros=t.value;if(t.value.trim())x.nenhum=false;setDirty();renderResult();
+    const ci=CR().findIndex(c=>c.kind==="bens"),sc=bensScore(S,si),el=$(`ai_${ci}_${si}`);if(el)el.textContent=sc!=null?`${bensList(S,si).length} benefício(s) → nota ${sc}`:"";}
+  if(t.dataset.pn&&t.tagName!=="SELECT"){S.pn[t.dataset.pn]=t.value;setDirty();}
+  if(t.dataset.cc!=null){let v=t.value;if(t.dataset.ck==="parcela"){v=num();if(v===undefined)return;}ensureCond(S)[+t.dataset.cc][t.dataset.ck]=v;setDirty();updateCond();}
+});
+document.addEventListener("focusout",e=>{const t=e.target;if(RENDERING||!S||!t.classList)return;
+  if(t.classList.contains("money")&&!t.classList.contains("bad")){const v=parseBR(t.value);if(v!=null&&!Number.isNaN(v))t.value=fmtIn(v);}
+  if(t.classList.contains("pct")&&!t.classList.contains("bad")){const v=parseBR(t.value);if(v!=null&&!Number.isNaN(v))t.value=fmtPct(v);}
+  if(t.classList.contains("bad")){t.classList.remove("bad");const k=t.dataset;t.value=k.p!=null?fmtIn(S.price[+k.p]):k.b==="atual"?fmtIn(S.bid.atual):k.b==="meta"?fmtPct(S.bid.meta):k.ref==="valor"?fmtIn(S.ref.valor):k.cc!=null?fmtIn(S.cond[+k.cc].parcela):t.value;}
+  if(t.dataset.idx!=null||t.dataset.bout!=null){setTimeout(()=>{const a=document.activeElement;if(a&&(a.dataset.idx!=null||a.dataset.bout!=null))return;renderCriteria();},0);}
+});
+window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue="";}});
+
+async function copyText(t,msg){try{await navigator.clipboard.writeText(t);toast(msg);}catch(err){toast("Não foi possível copiar neste navegador");}}
+$("copy").onclick=()=>{
+  const r=compute().sort((a,b)=>(b.pct??-1)-(a.pct??-1)),v=verdictText(),b=S.bid;
+  let t=`${S.deal||"BID"} (${S.id} · ${tipoOf().nome})\n\n${v.h}. ${v.p}\n\nPreparação do BID\n`;
+  t+=`1. Valor médio: ${+b.atual>0?brl(b.atual):"não informado"}${custoAnual()?" · custo anual "+brl(custoAnual())+" ("+qtdAno()+"/ano)":""}${b.hist?" · "+b.hist:""}\n`;
+  t+=`2. Objetivo: ${+b.meta>0?"redução de "+n1(+b.meta)+"%"+(target()?" (target "+brl(target())+")":""):""}${b.obj?" "+b.obj:""}${!(+b.meta>0)&&!b.obj?"não definido":""}\n`;
+  t+=`3. Moedas de troca: ${[b.offer.join(", "),b.offerTxt].filter(Boolean).join(". ")||"não definidas"}\n4. BATNA: ${batnaText()||"não definido"}\n`;
+  if(+S.ref.valor>0)t+=`Referência de mercado (consulta): ${brl(S.ref.valor)}${S.ref.fonte?" · "+S.ref.fonte:""}\n`;
+  if(S.area)t+=`Área solicitante: ${S.area}\n`;
+  t+=`\nRanking:\n`;
+  r.forEach((x,i)=>t+=`${i+1}. ${x.n}: ${x.pct==null?"sem nota":pc(x.pct)}${S.price[x.si]>0?" ("+brl(+S.price[x.si])+")":""}\n`);
+  t+="\nPontos a negociar:\n";
+  S.sup.forEach((n,si)=>{const g=gapsFor(si);if(!g.length)return;t+=`\n${n}\n`;g.forEach(x=>t+=`- ${x.c.t} (nota ${n1(x.s)}): buscar ${x.c.g[2].toLowerCase()}${x.best?`; ${x.best.n} oferece ${n1(x.best.v)}`:""}\n`);});
+  copyText(t,"Resumo copiado");
+};
+$("copyCC").onclick=()=>{
+  const f=v=>v==null||v===""?"":String(Math.round(v*100)/100).replace(".",","),si=chosen(S);
+  const H=["FORNECEDOR","ESCOLHIDO","PROPOSTA","TEMPO DE CONTRATO","MOEDA","QTD PARCELAS","VALOR DA PARCELA","1º PAGAMENTO","ÚLTIMO PREVISTO","TOTAL PARCELADO","SLA / ENTREGA","GARANTIA","PLUS/BENEFÍCIOS","ÍNDICE DE REAJUSTE","MULTA RESCISÓRIA"];
+  const L=S.sup.map((n,i)=>{const c=condOf(S,i);return[n.replace(/\t/g," "),i===si?"Sim":"",f(+S.price[i]>0?+S.price[i]:null),c.tempo,c.moeda,c.parcelas??"",f(c.parcela),fmtD(c.primeiroPgto),c.parcelas>1?fmtD(c.ultimo):"",f(c.total),evLabel(S,"sla",i),evLabel(S,"gar",i),evLabel(S,"bens",i),idxOf(S,i).replace(/\t/g," "),evLabel(S,"multa",i)].join("\t");});
+  copyText([`${S.deal||"BID"} · comparativo de condições comerciais`,H.join("\t"),...L].join("\n"),"Comparativo copiado. Cole no Excel");
+};
+$("copyTsv").onclick=()=>{
+  const H=["BID","TIPO","ÁREA SOLICITANTE","FORNECEDOR","ESCOPO","VALOR MÉDIO","PROPOSTA","TARGET","SAVING","SAVING %","PRAZO PGTO","SLA","GARANTIA","REAJUSTE","PLUS/BENEFÍCIOS","RISCO","STATUS","OBSERVAÇÕES","RESPONSÁVEL","PRAZO","TEMPO DE CONTRATO","MOEDA","QTD PARCELAS","VALOR DA PARCELA","1º PAGAMENTO"];
+  const f=v=>v==null||v===""?"":String(Math.round(v*100)/100).replace(".",","),c=s=>String(s??"").replace(/[\t\n]/g," ");
+  const rows=filteredRows().map(r=>[c(r.nome),r.tipo,c(r.area),c(r.forn),c(r.escopo),f(r.atual),f(r.prop),f(r.target),f(r.saving),r.savingPct==null?"":f(r.savingPct),c(r.pgto),c(r.sla),c(r.gar),c(r.idxTxt),c(r.bensTxt),r.risco,r.status,c(r.acao),c(r.resp),fmtD(r.prazo),r.cc.tempo,r.cc.moeda,r.cc.parcelas??"",f(r.cc.parcela),fmtD(r.cc.primeiroPgto)].join("\t"));
+  copyText([H.join("\t"),...rows].join("\n"),"Painel copiado. Cole no Excel");
+};
+
+/* ===================== INÍCIO ===================== */
+function renderAuth(){
+  const m=$("mode"),btn=$("authBtn");
+  if(!CONFIGURED){m.className="badge local";m.textContent="Modo local de teste";$("userName").textContent="";btn.hidden=true;return;}
+  if(account){m.className="badge on";m.textContent="SharePoint conectado";$("userName").textContent=Store.user;btn.hidden=false;btn.textContent="Sair";btn.onclick=()=>Store.logout();}
+  else{m.className="badge off";m.textContent="Desconectado";$("userName").textContent="";btn.hidden=false;btn.textContent="Entrar com a conta Microsoft";btn.onclick=()=>Store.login();}
+}
+async function loadAll(){
+  banner("Carregando BIDs…","info");
+  try{[BIDS,IND]=await Promise.all([Store.list(),Store.listInd()]);banner("");}catch(e){banner(esc(e.message));}
+  fillFilters();
+  if(view==="painel")renderPainel();renderTabs();
+}
+(async function(){
+  $("fStatus").innerHTML=`<option value="abertas">BIDs abertos</option><option value="todas">Todos os BIDs</option>`+STATUS.map(s=>`<option>${s}</option>`).join("");
+  showView("painel");
+  let ok=false;
+  try{ok=await Store.init();}catch(e){banner("Não foi possível conectar ao SharePoint: "+esc(e.message)+" Confira a CONFIGURAÇÃO no início do arquivo.");}
+  renderAuth();
+  if(!CONFIGURED)banner("Modo local de teste: os dados ficam só neste navegador. Preencha a CONFIGURAÇÃO no início do arquivo para gravar no SharePoint.","info");
+  if(ok){await loadAll();if(!CONFIGURED)banner("Modo local de teste: os dados ficam só neste navegador. Preencha a CONFIGURAÇÃO no início do arquivo para gravar no SharePoint.","info");}
+  else if(CONFIGURED&&!account)banner("Entre com sua conta Microsoft para ver e gravar os BIDs.","info");
+})();
+</script>
+</body>
+</html>
