@@ -635,6 +635,57 @@ const extOf=n=>String(n||"").split(".").pop().toLowerCase();
 const b64ToBlob=(b64,type)=>{const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:type||"application/octet-stream"});};
 const fileToB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]||"");r.onerror=()=>rej(new Error("Falha ao ler o arquivo"));r.readAsDataURL(f);});
 const dataUrlToBlob=u=>{const m=/^data:([^;,]*)(;base64)?,(.*)$/.exec(u);return m?(m[2]?b64ToBlob(m[3],m[1]):new Blob([decodeURIComponent(m[3])],{type:m[1]})):null;};
+/* ===== Pasta do SharePoint sincronizada no computador (sem cadastro de aplicativo) ===== */
+const DATA_DIR="Squad_Negociacao_dados";let FSDIR=null,FSLABEL="",PENDING=null,pollT=null;
+const idbOpen=()=>new Promise((res,rej)=>{const r=indexedDB.open("squad-negociacao",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+async function idbGet(k){try{const d=await idbOpen();return await new Promise(res=>{const q=d.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(e){return null;}}
+async function idbSet(k,v){try{const d=await idbOpen();await new Promise(res=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=res;t.onerror=res;});}catch(e){}}
+function userName(){let n="";try{n=localStorage.getItem("squad-usuario")||"";}catch(e){}return n||"Colaborador";}
+function askUserName(force){let n="";try{n=localStorage.getItem("squad-usuario")||"";}catch(e){}
+  if(!n||force){const v=prompt("Seu nome (aparece no histórico, nos anexos e como comprador):",n||"");if(v&&v.trim()){n=v.trim();try{localStorage.setItem("squad-usuario",n);}catch(e){}}}return n||"Colaborador";}
+const FS={
+  async attach(h){FSDIR=h.name===DATA_DIR?h:await h.getDirectoryHandle(DATA_DIR,{create:true});FSLABEL=h.name===DATA_DIR?h.name:h.name+" › "+DATA_DIR;},
+  async sub(...names){let d=FSDIR;for(const n of names)d=await d.getDirectoryHandle(n,{create:true});return d;},
+  async readJsonDir(d,check){const out=[];for await(const [name,hd] of d.entries()){if(hd.kind!=="file"||!name.endsWith(".json"))continue;
+    try{const f=await hd.getFile(),o=JSON.parse(await f.text());if(check&&!check(name,o))continue;o._etag=f.lastModified;out.push(o);}catch(e){}}return out;},
+  async list(){return this.readJsonDir(await this.sub("bids"),(name,o)=>o&&o.id&&name===o.id+".json");},
+  async write(d,name,data){const fh=await d.getFileHandle(name,{create:true}),w=await fh.createWritable();await w.write(data);await w.close();return fh;},
+  async save(b){
+    const F=b.files||[];
+    for(const lst of F)for(const f of (lst||[])){if(f&&String(f.url||"").startsWith("data:")){const bl=dataUrlToBlob(f.url);if(bl){const up=await this.upload(b.id,new File([bl],f.nome||"anexo",{type:bl.type}));f.url=up.url;f.id=up.id;}}}
+    const d=await this.sub("bids"),name=b.id+".json";let fh=null;try{fh=await d.getFileHandle(name);}catch(e){}
+    if(fh){const cur=await fh.getFile();if(b._etag==null||cur.lastModified!==b._etag)throw Object.assign(new Error("Outra pessoa salvou este BID enquanto você editava."),{conflict:true});}
+    try{fh=await this.write(d,name,JSON.stringify(b,(k,v)=>k.startsWith("_")?undefined:v,1));}catch(e){throw new Error("Não foi possível gravar na pasta. Confira se ela está sincronizada e se você tem permissão de edição.");}
+    b._etag=(await fh.getFile()).lastModified;
+  },
+  async upload(bidId,file,onProg){
+    const stamp=new Date().toISOString().replace(/[-:T]/g,"").slice(0,14),safe=file.name.replace(/[\\/:*?"<>|#%]/g,"_"),name=stamp+"_"+safe;
+    try{await this.write(await this.sub("anexos",bidId),name,file);}catch(e){throw new Error(`Não foi possível gravar ${file.name} na pasta.`);}
+    onProg&&onProg(100);return{id:name,url:`fs:${bidId}/${name}`};
+  },
+  async fileBlob(rel){const[bid,...rest]=rel.split("/");try{const fh=await (await this.sub("anexos",bid)).getFileHandle(rest.join("/"));return await fh.getFile();}catch(e){throw new Error("Anexo não encontrado na pasta (pode ainda estar sincronizando).");}},
+  async listInd(){return this.readJsonDir(await this.sub("indicadores"),(n,o)=>o&&o.mes);},
+  async saveInd(rec){try{await this.write(await this.sub("indicadores"),rec.mes+".json",JSON.stringify(rec,null,1));}catch(e){throw new Error("Não foi possível registrar o fechamento na pasta.");}}
+};
+async function connectFolder(){
+  if(!window.showDirectoryPicker){banner("Para conectar a pasta, abra a ferramenta no <strong>Microsoft Edge</strong> ou no <strong>Google Chrome</strong>.");return;}
+  if(dirty&&!confirm("Há alterações não salvas no BID aberto. Continuar e descartar?"))return;
+  let h=null;
+  if(PENDING){try{if(await PENDING.requestPermission({mode:"readwrite"})==="granted")h=PENDING;}catch(e){}}
+  if(!h){try{h=await window.showDirectoryPicker({id:"squad-negociacao",mode:"readwrite"});}catch(e){return;}}
+  try{await FS.attach(h);}catch(e){banner("Não foi possível usar essa pasta: "+esc(e.message));return;}
+  await idbSet("dir",h);PENDING=null;MODE="pasta";Store.user=askUserName(false);
+  setDirty(false);S=null;showView("painel");renderAuth();await loadAll();
+  let loc=[];try{loc=JSON.parse(localStorage.getItem(LOCAL_KEY))||[];}catch(e){}
+  const novos=loc.filter(x=>x&&x.id&&!BIDS.some(b=>b.id===x.id));
+  if(novos.length&&confirm(`Encontrei ${novos.length} BID(s) salvos só neste navegador. Levar para a pasta compartilhada?`)){
+    let ok=0;for(const b of novos){const c=JSON.parse(JSON.stringify(b));delete c._etag;try{await FS.save(c);ok++;}catch(e){}}
+    await loadAll();toast(`${ok} BID(s) levados para a pasta`);
+  }
+  startPoll();
+}
+function startPoll(){clearInterval(pollT);pollT=setInterval(async()=>{if(MODE!=="pasta"||view!=="painel"||document.hidden)return;
+  try{const[b,i]=await Promise.all([Store.list(),Store.listInd()]);BIDS=b;IND=i;fillFilters();renderPainel();renderTabs();}catch(e){}},30000);}
 const Store={
   user:"",
   async init(){
@@ -647,15 +698,20 @@ const Store={
         MODE="claude";return true;
       }
     }
-    const ok=await SPStore.init();this.user=SPStore.user;MODE=CONFIGURED&&typeof msal!=="undefined"?"sp":"local";return ok;
+    if(CONFIGURED&&typeof msal!=="undefined"){const ok=await SPStore.init();this.user=SPStore.user;MODE="sp";return ok;}
+    const hnd=await idbGet("dir");
+    if(hnd&&hnd.queryPermission){try{if(await hnd.queryPermission({mode:"readwrite"})==="granted"){await FS.attach(hnd);MODE="pasta";this.user=userName();return true;}}catch(e){}PENDING=hnd;}
+    await SPStore.init();this.user=SPStore.user;MODE="local";return true;
   },
   login(){SPStore.login();},logout(){SPStore.logout();},
   async list(){
+    if(MODE==="pasta")return FS.list();
     if(MODE!=="claude")return SPStore.list();
     const s=await CDB.collection("bids").limit(1000).get();
     return s.docs.map(d=>{const x=JSON.parse(JSON.stringify(d.data()));x._etag=x.rev||0;return x;});
   },
   async save(b){
+    if(MODE==="pasta")return FS.save(b);
     if(MODE!=="claude")return SPStore.save(b);
     const F=b.files||[];
     for(const lst of F)for(const f of (lst||[])){if(f&&String(f.url||"").startsWith("data:")){const bl=dataUrlToBlob(f.url);if(bl){const up=await this.upload(b.id,new File([bl],f.nome||"anexo",{type:bl.type}));f.url=up.url;f.id=up.id;}}}
@@ -668,6 +724,7 @@ const Store={
     b._etag=body.rev;
   },
   async upload(bidId,file,onProg){
+    if(MODE==="pasta")return FS.upload(bidId,file,onProg);
     if(MODE!=="claude")return SPStore.upload(bidId,file,onProg);
     const ext=extOf(file.name);
     if(CASSETS&&ASSET_OK.includes(ext)&&file.size<=20*1024*1024){
@@ -682,14 +739,17 @@ const Store={
   async fileBlob(f){
     const u=String(f.url||"");
     if(u.startsWith("data:"))return dataUrlToBlob(u);
+    if(u.startsWith("fs:"))return FS.fileBlob(u.slice(3));
     if(u.startsWith("db:")){const[,fid,n]=u.split(":");let s="";for(let i=0;i<+n;i++){const d=await CDB.collection("anexos").doc(`${fid}_${i}`).get();if(!d.exists)throw new Error("Parte do anexo não encontrada.");s+=(d.data()||{}).d||"";}return b64ToBlob(s,MIME[extOf(f.nome)]);}
     return null;
   },
   async listInd(){
+    if(MODE==="pasta")return FS.listInd();
     if(MODE!=="claude")return SPStore.listInd();
     const s=await CDB.collection("indicadores").limit(1000).get();return s.docs.map(d=>JSON.parse(JSON.stringify(d.data())));
   },
   async saveInd(rec){
+    if(MODE==="pasta")return FS.saveInd(rec);
     if(MODE!=="claude")return SPStore.saveInd(rec);
     try{await CDB.collection("indicadores").doc(rec.mes).set(JSON.parse(JSON.stringify(rec)));}catch(e){throw new Error("Não foi possível registrar o fechamento ("+(e&&e.code||"erro")+").");}
   }
@@ -1028,7 +1088,7 @@ function renderSuppliers(){
   $("suppliers").innerHTML=S.sup.map((n,i)=>`<div class="supcard"><div class="sup"><span class="dot" style="background:${COLORS[i]}"></span>
   <input value="${esc(n)}" data-i="${i}" aria-label="Nome do fornecedor ${i+1}">
   ${S.sup.length>2?`<button class="icon" data-del="${i}" aria-label="Remover ${esc(n)}">×</button>`:""}</div>
-  ${F[i].length?`<ul class="files">${F[i].map((f,j)=>`<li><span aria-hidden="true">📎</span>${/^(db:|data:)/.test(f.url)?`<a data-fdl="${i}:${j}" style="cursor:pointer" title="${esc(f.nome)} · enviado em ${fmtDT(f.em)} por ${esc(f.por)}">${esc(f.nome)}`:`<a href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(f.nome)} · enviado em ${fmtDT(f.em)} por ${esc(f.por)}">${esc(f.nome)}`}</a><small>${kb(f.tam)}</small><button class="icon" data-rmfile="${i}:${j}" aria-label="Remover anexo ${esc(f.nome)}">×</button></li>`).join("")}</ul>`:""}
+  ${F[i].length?`<ul class="files">${F[i].map((f,j)=>`<li><span aria-hidden="true">📎</span>${/^(db:|data:|fs:)/.test(f.url)?`<a data-fdl="${i}:${j}" style="cursor:pointer" title="${esc(f.nome)} · enviado em ${fmtDT(f.em)} por ${esc(f.por)}">${esc(f.nome)}`:`<a href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(f.nome)} · enviado em ${fmtDT(f.em)} por ${esc(f.por)}">${esc(f.nome)}`}</a><small>${kb(f.tam)}</small><button class="icon" data-rmfile="${i}:${j}" aria-label="Remover anexo ${esc(f.nome)}">×</button></li>`).join("")}</ul>`:""}
   ${UPL[i]?`<div class="upl">${esc(UPL[i])}</div>`:""}
   <label class="attach"><input type="file" multiple data-upl="${i}" accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.doc,.msg,.eml,.txt,.zip">📎 Anexar orçamento</label></div>`).join("");
   $("addSup").disabled=S.sup.length>=5;
@@ -1413,7 +1473,8 @@ async function genCfg(){
 function renderAuth(){
   const m=$("mode"),btn=$("authBtn");
   if(MODE==="claude"){m.className="badge on";m.textContent="Conectado · dados compartilhados";$("userName").textContent=Store.user;btn.hidden=true;return;}
-  if(MODE==="local"){m.className="badge local";m.textContent="Modo local de teste";$("userName").textContent="";btn.hidden=false;btn.textContent="⚙ Configurar SharePoint";btn.onclick=()=>openCfg();return;}
+  if(MODE==="pasta"){m.className="badge on";m.textContent="Pasta do SharePoint conectada";$("userName").innerHTML=`<span title="Pasta: ${esc(FSLABEL)}">${esc(Store.user)}</span> <a style="color:#C6D0DC;cursor:pointer;text-decoration:underline" id="chgUser">trocar nome</a>`;$("chgUser").onclick=()=>{Store.user=askUserName(true);renderAuth();};btn.hidden=false;btn.textContent="📁 Trocar pasta";btn.onclick=()=>{PENDING=null;connectFolder();};return;}
+  if(MODE==="local"){m.className="badge local";m.textContent="Modo local de teste";$("userName").textContent="";btn.hidden=false;btn.textContent=PENDING?`📁 Reconectar pasta ${PENDING.name}`:"📁 Conectar pasta do SharePoint";btn.onclick=()=>connectFolder();return;}
   if(account){m.className="badge on";m.textContent="SharePoint conectado";$("userName").textContent=Store.user;btn.hidden=false;btn.textContent="Sair";btn.onclick=()=>Store.logout();}
   else{m.className="badge off";m.textContent="Desconectado";$("userName").textContent="";btn.hidden=false;btn.textContent="Entrar com a conta Microsoft";btn.onclick=()=>Store.login();}
 }
@@ -1439,8 +1500,8 @@ async function loadAll(){
   banner("Conectando…","info");
   try{ok=await Store.init();}catch(e){banner("Não foi possível conectar: "+esc(e.message));}
   renderAuth();
-  const LOCALMSG="Modo local de teste: os dados ficam só neste navegador. Use ⚙ Configurar SharePoint (no topo) para conectar a ferramenta ao SharePoint e liberar o acesso do time.";
-  if(ok){await loadAll();if(MODE==="local")banner(LOCALMSG,"info");if(MODE==="claude")liveSync();}
+  const LOCALMSG=PENDING?"Clique em 📁 Reconectar pasta (no topo) para voltar a trabalhar com os dados compartilhados do time.":"Modo local de teste: os dados ficam só neste navegador. Clique em 📁 Conectar pasta do SharePoint (no topo) e escolha a pasta sincronizada do time.";
+  if(ok){await loadAll();if(MODE==="local")banner(LOCALMSG,"info");if(MODE==="claude")liveSync();if(MODE==="pasta")startPoll();}
   else if(MODE==="sp"&&!account)banner("Entre com sua conta Microsoft para ver e gravar os BIDs.","info");
 })();
 </script>
