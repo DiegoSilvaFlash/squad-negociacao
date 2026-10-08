@@ -652,9 +652,12 @@ const SPStore={
     if(!r.ok)throw new Error(`Erro ${r.status} ao listar a pasta do SharePoint`);
     const items=(await r.json()).value.filter(i=>i.file&&i.name.endsWith(".json"));
     const out=await Promise.all(items.map(async i=>{
-      try{const d=await (await fetch(i["@microsoft.graph.downloadUrl"])).json();d._etag=i.eTag;return d;}catch(e){return null;}
+      for(let t=0;t<3;t++){try{const r=await fetch(i["@microsoft.graph.downloadUrl"],{cache:"no-store"});if(!r.ok)throw new Error(r.status);const d=await r.json();d._etag=i.eTag;return d;}catch(e){await new Promise(r=>setTimeout(r,700*(t+1)));}}
+      return{_falhaLeitura:i.name};
     }));
-    return out.filter(Boolean);
+    const bad=out.filter(x=>x&&x._falhaLeitura);
+    if(bad.length)setTimeout(()=>banner(`${bad.length} BID(s) não puderam ser lidos agora (${bad.map(x=>esc(x._falhaLeitura)).join(", ")}). Clique em <strong>Atualizar</strong> em alguns segundos.`),50);
+    return out.filter(x=>x&&!x._falhaLeitura);
   },
   async save(b){
     const body=JSON.stringify(b,(k,v)=>k.startsWith("_")?undefined:v,1);
@@ -1424,10 +1427,22 @@ $("bkUp").onchange=async e=>{
   const over=exist&&confirm(`O backup tem ${list.length} BID(s): ${novos.length} novo(s) e ${exist} que já existe(m).\n\nOK = restaurar tudo, substituindo os existentes pela versão do backup.\nCancelar = restaurar só os novos.`);
   const alvo=over?list:novos;if(!alvo.length){toast("Nada novo para restaurar");return;}
   banner(`Restaurando ${alvo.length} BID(s)…`,"info");let ok=0;
-  for(const b of alvo){const cur=BIDS.find(x=>x.id===b.id),c=JSON.parse(JSON.stringify(b));if(cur)c._etag=cur._etag;
+  const falhas=[];let n=0;
+  for(const b of alvo){n++;banner(`Restaurando ${n} de ${alvo.length}: ${esc(b.deal||b.id)}…`,"info");
+    const cur=BIDS.find(x=>x.id===b.id),c=JSON.parse(JSON.stringify(b));delete c._etag;if(cur)c._etag=cur._etag;
     (c.hist=c.hist||[]).push({em:new Date().toISOString(),por:Store.user,tipo:"a",texto:"Restaurado a partir de backup"});
-    try{await Store.save(c);ok++;}catch(err){banner(esc(err.message));}}
-  await loadAll();toast(`${ok} BID(s) restaurado(s)`);
+    let feito=false,ult="";
+    for(let t=0;t<4&&!feito;t++){
+      try{await Store.save(c);feito=true;}
+      catch(err){ult=err.message||String(err);
+        if(err.conflict){try{const L=await Store.list(),x=L.find(y=>y.id===c.id);c._etag=x?x._etag:undefined;}catch(e){}}
+        await new Promise(r=>setTimeout(r,1200*(t+1)));}
+    }
+    if(feito)ok++;else falhas.push(`${b.deal||b.id} (${ult})`);
+  }
+  await loadAll();
+  if(falhas.length)banner(`<strong>${ok} de ${alvo.length} BID(s) restaurados.</strong> Não foi possível restaurar: ${falhas.map(esc).join("; ")}. Tente <strong>Restaurar backup</strong> de novo e escolha <strong>Cancelar</strong> para gravar só os que faltam.`);
+  else{banner("");toast(`${ok} BID(s) restaurado(s)`);}
 };
 $("pgPer").onchange=renderCrono;
 $("copyPg").onclick=()=>{const{lst}=cronograma(),per=$("pgPer").value,hoje=today();
