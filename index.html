@@ -15,14 +15,20 @@
    Enquanto CLIENT_ID começar com "COLE", a ferramenta roda em
    modo local de teste (dados só neste navegador).                */
 const CONFIG = {
-  CLIENT_ID:   "COLE_AQUI_O_CLIENT_ID",
-  TENANT_ID:   "COLE_AQUI_O_TENANT_ID",
-  SP_HOSTNAME: "COLE_AQUI.sharepoint.com",
+  CLIENT_ID:   "c7a8fe93-1bdf-4739-94d0-626d884a605c",
+  TENANT_ID:   "9cc5e35a-c64c-4450-ae6d-9bf065f73c61",
+  SP_HOSTNAME: "flashcouriercombr.sharepoint.com",
   SP_SITE_PATH:"/sites/SUPRIMENTOS_NEW",
-  LIBRARY_NAME:"",          // vazio = biblioteca padrão (Documentos). Use o mesmo valor dos Planos de Ação.
-  FOLDER:      "CSC - SUPRIMENTOS/GERENCIAL/INDICADORES/DIÁRIA/Squad_Negociacao",
-  SCOPES:      ["User.Read","Sites.ReadWrite.All"]
+  LIBRARY_NAME:"",
+  FOLDER:      "CSC - SUPRIMENTOS/GERENCIAL/0_PAINEL/Squad_Negociacao",
+  SCOPES:      ["User.Read","Files.ReadWrite","Sites.ReadWrite.All"]
 };
+/* Igual à Gestão de Seguros: sem depender da TI. No GitHub Pages o login abre uma janela (popup)
+   que retorna por um endereço já autorizado no Azure AD (o do Plano de Ação RH e Operação, mesmo domínio).
+   Se um dia a TI cadastrar o endereço do Squad, troque USAR_REDIRECT_PROPRIO para true. */
+const USAR_REDIRECT_PROPRIO=false;
+const REDIRECT_URI=(location.hostname==="diegosilvaflash.github.io"&&!USAR_REDIRECT_PROPRIO)?"https://diegosilvaflash.github.io/plano-acao-rh-operacao/":location.origin+location.pathname;
+const MODO_ARQUIVO=location.protocol==="file:";
 </script>
 <style>
 :root{
@@ -529,17 +535,22 @@ function toast(m){const el=$("toast");el.textContent=m;el.classList.add("show");
 function banner(msg,type="err"){$("banner").innerHTML=msg?`<div class="banner ${type}">${msg}</div>`:"";}
 
 /* ===================== ARMAZENAMENTO ===================== */
-const CONFIGURED=!CONFIG.CLIENT_ID.startsWith("COLE");
+const CONFIGURED=!CONFIG.CLIENT_ID.startsWith("COLE")&&!MODO_ARQUIVO;
 let msalApp=null,account=null,driveId=null;
 const LOCAL_KEY="squad-negociacao-local";
 const SPStore={
   async init(){
     if(!CONFIGURED||typeof msal==="undefined"){this.user="Modo local";return true;}
-    msalApp=new msal.PublicClientApplication({auth:{clientId:CONFIG.CLIENT_ID,authority:"https://login.microsoftonline.com/"+CONFIG.TENANT_ID,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+    msalApp=new msal.PublicClientApplication({auth:{clientId:CONFIG.CLIENT_ID,authority:"https://login.microsoftonline.com/"+CONFIG.TENANT_ID,redirectUri:REDIRECT_URI},cache:{cacheLocation:"localStorage"}});
     if(msalApp.initialize)await msalApp.initialize();
-    const r=await msalApp.handleRedirectPromise();
-    account=r?.account||msalApp.getAllAccounts()[0]||null;
+    let r=null;try{r=await msalApp.handleRedirectPromise();}catch(e){}
+    account=r?.account||msalApp.getActiveAccount?.()||msalApp.getAllAccounts()[0]||null;
+    if(!account){try{const s=await msalApp.ssoSilent({scopes:CONFIG.SCOPES});account=s.account;}catch(e){}}
     if(!account)return false;
+    try{msalApp.setActiveAccount&&msalApp.setActiveAccount(account);}catch(e){}
+    return this.connect();
+  },
+  async connect(){
     this.user=account.name||account.username;
     const site=await this.json(`/sites/${CONFIG.SP_HOSTNAME}:${CONFIG.SP_SITE_PATH}`);
     if(CONFIG.LIBRARY_NAME){
@@ -550,11 +561,15 @@ const SPStore={
     }else driveId=(await this.json(`/sites/${site.id}/drive`)).id;
     return true;
   },
-  login(){msalApp.loginRedirect({scopes:CONFIG.SCOPES});},
+  async login(){
+    const r=await msalApp.loginPopup({scopes:CONFIG.SCOPES,prompt:"select_account"});account=r.account;
+    try{msalApp.setActiveAccount&&msalApp.setActiveAccount(account);}catch(e){}
+    return this.connect();
+  },
   logout(){msalApp.logoutRedirect({account});},
   async token(){
     try{return(await msalApp.acquireTokenSilent({scopes:CONFIG.SCOPES,account})).accessToken;}
-    catch(e){msalApp.acquireTokenRedirect({scopes:CONFIG.SCOPES,account});throw new Error("Sessão expirada. Redirecionando para login.");}
+    catch(e){try{return(await msalApp.acquireTokenPopup({scopes:CONFIG.SCOPES,account})).accessToken;}catch(e2){throw new Error("Sessão expirada. Recarregue a página e entre novamente.");}}
   },
   async req(path,opt={}){
     const t=await this.token();
@@ -684,7 +699,14 @@ async function connectFolder(){
   }
   startPoll();
 }
-function startPoll(){clearInterval(pollT);pollT=setInterval(async()=>{if(MODE!=="pasta"||view!=="painel"||document.hidden)return;
+async function offerLocalMigration(){
+  let loc=[];try{loc=JSON.parse(localStorage.getItem(LOCAL_KEY))||[];}catch(e){}
+  const novos=loc.filter(x=>x&&x.id&&!BIDS.some(b=>b.id===x.id));
+  if(!novos.length||!confirm(`Encontrei ${novos.length} BID(s) salvos só neste navegador. Levar para o SharePoint, para o time ver?`))return;
+  let ok=0;for(const b of novos){const c=JSON.parse(JSON.stringify(b));delete c._etag;try{await Store.save(c);ok++;}catch(e){}}
+  await loadAll();toast(`${ok} BID(s) levados para o SharePoint`);
+}
+function startPoll(){clearInterval(pollT);pollT=setInterval(async()=>{if((MODE!=="pasta"&&MODE!=="sp")||view!=="painel"||document.hidden)return;
   try{const[b,i]=await Promise.all([Store.list(),Store.listInd()]);BIDS=b;IND=i;fillFilters();renderPainel();renderTabs();}catch(e){}},30000);}
 const Store={
   user:"",
@@ -698,12 +720,10 @@ const Store={
         MODE="claude";return true;
       }
     }
-    if(CONFIGURED&&typeof msal!=="undefined"){const ok=await SPStore.init();this.user=SPStore.user;MODE="sp";return ok;}
-    const hnd=await idbGet("dir");
-    if(hnd&&hnd.queryPermission){try{if(await hnd.queryPermission({mode:"readwrite"})==="granted"){await FS.attach(hnd);MODE="pasta";this.user=userName();return true;}}catch(e){}PENDING=hnd;}
+    if(CONFIGURED&&typeof msal!=="undefined"){MODE="sp";const ok=await SPStore.init();this.user=SPStore.user;return ok;}
     await SPStore.init();this.user=SPStore.user;MODE="local";return true;
   },
-  login(){SPStore.login();},logout(){SPStore.logout();},
+  async login(){const ok=await SPStore.login();this.user=SPStore.user;return ok;},logout(){SPStore.logout();},
   async list(){
     if(MODE==="pasta")return FS.list();
     if(MODE!=="claude")return SPStore.list();
@@ -1474,9 +1494,9 @@ function renderAuth(){
   const m=$("mode"),btn=$("authBtn");
   if(MODE==="claude"){m.className="badge on";m.textContent="Conectado · dados compartilhados";$("userName").textContent=Store.user;btn.hidden=true;return;}
   if(MODE==="pasta"){m.className="badge on";m.textContent="Pasta do SharePoint conectada";$("userName").innerHTML=`<span title="Pasta: ${esc(FSLABEL)}">${esc(Store.user)}</span> <a style="color:#C6D0DC;cursor:pointer;text-decoration:underline" id="chgUser">trocar nome</a>`;$("chgUser").onclick=()=>{Store.user=askUserName(true);renderAuth();};btn.hidden=false;btn.textContent="📁 Trocar pasta";btn.onclick=()=>{PENDING=null;connectFolder();};return;}
-  if(MODE==="local"){m.className="badge local";m.textContent="Modo local de teste";$("userName").textContent="";btn.hidden=false;btn.textContent=PENDING?`📁 Reconectar pasta ${PENDING.name}`:"📁 Conectar pasta do SharePoint";btn.onclick=()=>connectFolder();return;}
-  if(account){m.className="badge on";m.textContent="SharePoint conectado";$("userName").textContent=Store.user;btn.hidden=false;btn.textContent="Sair";btn.onclick=()=>Store.logout();}
-  else{m.className="badge off";m.textContent="Desconectado";$("userName").textContent="";btn.hidden=false;btn.textContent="Entrar com a conta Microsoft";btn.onclick=()=>Store.login();}
+  if(MODE==="local"){m.className="badge local";m.textContent="Modo local de teste";$("userName").textContent="";btn.hidden=false;btn.textContent="⚙ Configurar login Microsoft";btn.onclick=()=>openCfg();return;}
+  if(account){m.className="badge on";m.textContent="Conectado ao SharePoint";$("userName").textContent=Store.user;btn.hidden=false;btn.textContent="Sair";btn.onclick=()=>Store.logout();}
+  else{m.className="badge off";m.textContent="Desconectado";$("userName").textContent="";btn.hidden=false;btn.textContent="Entrar com a conta Microsoft";btn.onclick=async()=>{try{banner("Entrando…","info");await Store.login();renderAuth();banner("");await loadAll();startPoll();offerLocalMigration();}catch(e){banner(e&&/popup/i.test(e.errorCode||e.message||"")?"O navegador bloqueou a janela de login. Permita pop-ups para este site e tente de novo.":"Não foi possível entrar: "+esc(e.message||e));}};}
 }
 let liveOn=false,liveT=null;
 function liveSync(){
@@ -1500,9 +1520,9 @@ async function loadAll(){
   banner("Conectando…","info");
   try{ok=await Store.init();}catch(e){banner("Não foi possível conectar: "+esc(e.message));}
   renderAuth();
-  const LOCALMSG=PENDING?"Clique em 📁 Reconectar pasta (no topo) para voltar a trabalhar com os dados compartilhados do time.":"Modo local de teste: os dados ficam só neste navegador. Clique em 📁 Conectar pasta do SharePoint (no topo) e escolha a pasta sincronizada do time.";
-  if(ok){await loadAll();if(MODE==="local")banner(LOCALMSG,"info");if(MODE==="claude")liveSync();if(MODE==="pasta")startPoll();}
-  else if(MODE==="sp"&&!account)banner("Entre com sua conta Microsoft para ver e gravar os BIDs.","info");
+  const LOCALMSG=MODO_ARQUIVO?"Aberto como arquivo do computador: os dados ficam só neste navegador. Para usar os dados do time, abra https://diegosilvaflash.github.io/squad-negociacao/":"Modo local: os dados ficam só neste navegador.";
+  if(ok){await loadAll();if(MODE==="local")banner(LOCALMSG,"info");if(MODE==="claude")liveSync();if(MODE==="pasta"||MODE==="sp")startPoll();if(MODE==="sp")offerLocalMigration();}
+  else if(MODE==="sp"&&!account)banner("Clique em <strong>Entrar com a conta Microsoft</strong>, no topo. É só na primeira vez: depois a ferramenta entra sozinha.","info");
 })();
 </script>
 </body>
