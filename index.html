@@ -219,6 +219,17 @@ tr.venc td{color:var(--muted)}
 .btn.danger{border-color:#E9B4AD;background:#FBE3E0;color:#7A1F14}
 .btn.danger:hover{background:#F6CFC9}
 .banner.trash{background:#FBE3E0;color:#7A1F14;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.acwrap{display:grid;gap:12px;grid-template-columns:minmax(220px,1fr) 2fr;margin-top:4px}
+@media (max-width:760px){.acwrap{grid-template-columns:1fr}}
+.acbox{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.pbar{height:16px;background:var(--btn);border-radius:8px;overflow:hidden;margin:10px 0 6px}
+.pbar>div{height:100%;background:var(--good);border-radius:8px;transition:width .4s ease}
+.actab td{vertical-align:middle}
+.actab input[type=text],.actab input[type=date],.actab select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--paper);min-width:0}
+.actab input[type=checkbox]{width:20px;height:20px;accent-color:var(--good)}
+.actab tr.done td{color:var(--muted)}
+.actab tr.done input[data-ak="t"]{text-decoration:line-through}
+.actab tr.late td:nth-child(4) input{border-color:var(--bad);color:var(--bad)}
 .hl-list{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:.93rem}
 .hl-list li{margin:3px 0}
 .feed{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:10px}
@@ -370,7 +381,7 @@ tr.venc td{color:var(--muted)}
       <label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="bkUp" accept=".json" hidden></label>
     </div>
     <div class="scroll vscroll"><table>
-      <thead><tr><th>BID</th><th>Tipo</th><th>Área solicitante</th><th>Fornecedor</th><th>Escopo</th><th>Valor médio</th><th>Proposta</th><th>Target</th><th>Saving</th><th>Prazo pgto</th><th>SLA</th><th>Garantia</th><th>Reajuste</th><th>Plus/Benefícios</th><th>Risco</th><th>Status</th><th>Observações</th><th>Responsável</th><th>Comprador</th><th>Prazo</th><th>Fechamento</th></tr></thead>
+      <thead><tr><th>BID</th><th>Tipo</th><th>Área solicitante</th><th>Fornecedor</th><th>Escopo</th><th>Valor médio</th><th>Proposta</th><th>Target</th><th>Saving</th><th>Prazo pgto</th><th>SLA</th><th>Garantia</th><th>Reajuste</th><th>Plus/Benefícios</th><th>Risco</th><th>Status</th><th>Ações</th><th>Observações</th><th>Responsável</th><th>Comprador</th><th>Prazo</th><th>Fechamento</th></tr></thead>
       <tbody id="pbody"></tbody><tfoot><tr id="pfoot"></tr></tfoot>
     </table></div>
   </section>
@@ -488,6 +499,25 @@ tr.venc td{color:var(--muted)}
     <p class="hint">Critérios com maior impacto a melhorar, ordenados por peso × distância da nota máxima. Quando um concorrente oferece mais, isso aparece como argumento.</p>
     <div class="gaps" id="gaps"></div><div id="trade"></div>
     <div class="row"><button class="btn primary" data-go="acomp">Ir para o acompanhamento</button><button class="btn" id="copy">Copiar resumo</button></div>
+  </section>
+  </div>
+
+  <div id="acoes" hidden>
+  <section>
+    <h2>Ações e Processo</h2>
+    <div class="summary" id="acKpis"></div>
+    <div class="acwrap"><div id="acBar"></div><div id="acChart"></div></div>
+    <h3 class="sub">Nova ação</h3>
+    <div class="acomp">
+      <div class="field wide"><label for="na_t">Ação / etapa do processo</label><input id="na_t" placeholder="ex.: Solicitar proposta revisada aos fornecedores" autocomplete="off"></div>
+      <div class="field"><label for="na_r">Responsável</label><input id="na_r" list="acResp" autocomplete="off"><datalist id="acResp"></datalist></div>
+      <div class="field"><label for="na_p">Prazo</label><input id="na_p" type="date"></div>
+      <div class="field" style="align-self:end"><button class="btn primary" id="na_add" style="width:100%">Adicionar ação</button></div>
+    </div>
+    <h3 class="sub">Ações</h3>
+    <div class="scroll vscroll"><table class="small actab" style="min-width:860px">
+      <thead><tr><th style="width:44px">Feito</th><th>Ação / etapa</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Concluída em</th><th></th></tr></thead>
+      <tbody id="acBody"></tbody></table></div>
   </section>
   </div>
 
@@ -957,7 +987,7 @@ function rowOf(b){
     cc:condOf(b,si),pgto:b.pn.pgto||(()=>{const c=condOf(b,si);return c.parcelas?(c.parcelas>1?`${c.parcelas}x de ${c.parcela?fmtM(c.parcela,c.moeda):"—"}`:`À vista${c.parcela?" "+fmtM(c.parcela,c.moeda):""}`):"";})()||sc(CR(b).findIndex(c=>c.pgto)),
     sla:[evLabel(b,"sla",si),b.pn.sla].filter(Boolean).join(" · ")||sc(CR(b).findIndex(c=>c.sla)),
     risco:b.pn.risco,status:b.pn.status,acao:b.pn.acao,resp:b.pn.resp,prazo:b.pn.prazo,open:isOpen(b),
-    comprador:b.pn.comprador||"",anexos:(b.files||[]).reduce((a,x)=>a+(x?x.length:0),0),fechamento:b.pn.status==="Fechado"?(b.pn.fechamento||""):"",
+    comprador:b.pn.comprador||"",...(()=>{const q=acProg(b);return{acN:q.n,acD:q.d,acPct:q.pct};})(),anexos:(b.files||[]).reduce((a,x)=>a+(x?x.length:0),0),fechamento:b.pn.status==="Fechado"?(b.pn.fechamento||""):"",
     mesIni:b.criadoEm?new Date(b.criadoEm).toLocaleDateString("sv").slice(0,7):"",
     mesFech:b.pn.status==="Fechado"&&b.pn.fechamento?b.pn.fechamento.slice(0,7):"",
     ciclo:b.pn.status==="Fechado"&&b.pn.fechamento&&b.criadoEm?Math.max(0,Math.round((new Date(b.pn.fechamento+"T12:00")-new Date(new Date(b.criadoEm).toLocaleDateString("sv")+"T12:00"))/864e5)):null,
@@ -966,7 +996,8 @@ function rowOf(b){
 }
 function snapshot(b){const r=rowOf(b);const ev={};CR(b).forEach(c=>{if(c.removed||!c.ev)return;b.sup.forEach((n,i)=>{const flag=c.sla?"sla":c.gar?"gar":c.bens?"bens":"multa";ev[`${c.ev} de ${n}`]=evLabel(b,flag,i);});});
   if(hasCrit(b,"idx"))b.sup.forEach((n,i)=>{ev[`Índice de reajuste de ${n}`]=idxOf(b,i);});
-  return{ev,area:r.area,qtd:b.bid.qtdAno?String(parseInt(b.bid.qtdAno)||""):"",ref:+((b.ref||{}).valor)>0?brl(b.ref.valor)+(b.ref.fonte?" ("+b.ref.fonte+")":""):"",tipo:r.tipo,nome:r.nome,forn:r.forn,prop:r.prop,atual:r.atual,status:r.status,risco:r.risco,acao:r.acao,resp:r.resp,prazo:r.prazo,comprador:r.comprador,fechamento:b.pn.fechamento||"",
+  const ac={};acList(b).forEach(a=>{ac[a.id]={t:a.t||"",st:a.st||"",resp:a.resp||"",prazo:a.prazo||""};});
+  return{ac,ev,area:r.area,qtd:b.bid.qtdAno?String(parseInt(b.bid.qtdAno)||""):"",ref:+((b.ref||{}).valor)>0?brl(b.ref.valor)+(b.ref.fonte?" ("+b.ref.fonte+")":""):"",tipo:r.tipo,nome:r.nome,forn:r.forn,prop:r.prop,atual:r.atual,status:r.status,risco:r.risco,acao:r.acao,resp:r.resp,prazo:r.prazo,comprador:r.comprador,fechamento:b.pn.fechamento||"",
   conds:Object.fromEntries(b.sup.map((n,i)=>[n,(()=>{const c=b.cond[i]||{};return LEG.some(k=>c[k]!=null&&c[k]!=="")?condStr(condOf(b,i))||"preenchido":"";})()])),
   meta:b.bid.meta,rank:ranked(b).map(x=>x.n+" "+pc(x.pct)).join(", "),prep:answered(b).filter(Boolean).length};}
 function diffs(a,b){
@@ -974,6 +1005,11 @@ function diffs(a,b){
   const f=(k,v)=>v==null||v===""?"vazio":k==="prop"||k==="atual"?brl(v):k==="parcela"?fmtM(v,b._m):k==="prazo"||k==="fechamento"||k==="primeiroPgto"?fmtD(v):k==="meta"?n1(v)+"%":v;
   Object.keys(lbl).forEach(k=>{if((a[k]??"")!==(b[k]??""))out.push(`${lbl[k]}: ${f(k,a[k])} → ${f(k,b[k])}`);});
   const ca=a.conds||{},cb=b.conds||{};Object.keys(cb).forEach(n=>{if((ca[n]||"")!==(cb[n]||""))out.push(`Condições de ${n}: ${ca[n]||"vazio"} → ${cb[n]||"vazio"}`);});
+  const aa=a.ac||{},ab=b.ac||{};
+  Object.keys(ab).forEach(id=>{const o=aa[id],n=ab[id];if(!o){out.push(`Ação incluída: "${n.t}"${n.resp?" · resp. "+n.resp:""}${n.prazo?" · prazo "+fmtD(n.prazo):""}`);return;}
+    const m=[];if(o.t!==n.t)m.push(`título "${o.t}" → "${n.t}"`);if(o.st!==n.st)m.push(`${o.st} → ${n.st}`);if(o.resp!==n.resp)m.push(`responsável ${o.resp||"vazio"} → ${n.resp||"vazio"}`);if(o.prazo!==n.prazo)m.push(`prazo ${fmtD(o.prazo)||"vazio"} → ${fmtD(n.prazo)||"vazio"}`);
+    if(m.length)out.push(`Ação "${n.t}": ${m.join(", ")}`);});
+  Object.keys(aa).forEach(id=>{if(!ab[id])out.push(`Ação removida: "${aa[id].t}"`);});
   const ea=a.ev||{},eb=b.ev||{};Object.keys(eb).forEach(k=>{if((ea[k]||"")!==(eb[k]||""))out.push(`${k}: ${ea[k]||"vazio"} → ${eb[k]||"vazio"}`);});
   if(a.rank!==b.rank&&b.rank)out.push("Avaliação: "+b.rank);
   if(a.prep!==b.prep)out.push(`Preparação: ${b.prep} de 4 perguntas respondidas`);
@@ -987,7 +1023,8 @@ function renderTabs(){
   $("tabs").innerHTML=`<button class="back" data-back="1">‹ Painel</button>
    <button role="tab" data-tab="prep" aria-selected="${tab==="prep"}">Preparação <span class="cnt">(${n}/4)</span></button>
    <button role="tab" data-tab="aval" aria-selected="${tab==="aval"}">Avaliação</button>
-   <button role="tab" data-tab="acomp" aria-selected="${tab==="acomp"}">Acompanhamento</button>`;
+   <button role="tab" data-tab="acomp" aria-selected="${tab==="acomp"}">Acompanhamento</button>
+   <button role="tab" data-tab="acoes" aria-selected="${tab==="acoes"}">Ações e Processo <span class="cnt">${(()=>{const p=acProg(S);return p.n?`(${p.d}/${p.n})`:"";})()}</span></button>`;
 }
 const buyers=()=>[...new Set(ATIVOS().map(b=>b.pn.comprador).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
 const mesLbl=m=>{const [y,mm]=m.split("-");return new Date(+y,+mm-1,1).toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(". de ","/").replace(" de ","/");};
@@ -1025,11 +1062,11 @@ function renderPainel(){
     <td class="r">${r.atual?brl(r.atual):"—"}</td><td class="r">${r.prop?brl(r.prop):"—"}</td><td class="r">${r.target?brl(r.target):"—"}</td>
     <td class="r sv ${r.saving==null?"":r.target?(r.prop<=r.target?"ok":"no"):(r.saving>=0?"ok":"no")}">${r.saving==null?"—":brl(r.saving)+`<small>${pc(r.savingPct)}${r.target?(r.prop<=r.target?" · no target":" · abaixo do target"):""}</small>`}</td>
     <td>${esc(r.pgto)}</td><td>${esc(r.sla)}</td><td>${esc(r.gar)}</td><td>${esc(r.idxTxt)}</td><td>${esc(r.bensTxt)}</td>
-    <td class="risk-${r.risco}">${r.risco}</td><td><span class="st st-${r.status}">${r.status}</span></td>
+    <td class="risk-${r.risco}">${r.risco}</td><td><span class="st st-${r.status}">${r.status}</span></td><td style="min-width:110px">${r.acN?`<div class="pbar" style="height:8px;margin:2px 0 4px"><div style="width:${r.acPct}%"></div></div><small>${r.acD}/${r.acN} · ${Math.round(r.acPct)}%</small>`:"—"}</td>
     <td title="${esc(r.acao)}">${esc(r.acao.length>80?r.acao.slice(0,80)+"…":r.acao)}</td><td>${esc(r.resp)}</td><td>${esc(r.comprador)}</td><td class="${r.open&&r.prazo&&r.prazo<today()?"late":""}">${fmtD(r.prazo)}</td><td>${fmtD(r.fechamento)}</td></tr>`).join("")
-    :`<tr><td colspan="21" class="empty" style="padding:18px;cursor:default">${ATIVOS().length?"Nenhum BID neste filtro.":"Nenhum BID ainda. Crie o primeiro em Novo BID."}</td></tr>`;
+    :`<tr><td colspan="22" class="empty" style="padding:18px;cursor:default">${ATIVOS().length?"Nenhum BID neste filtro.":"Nenhum BID ainda. Crie o primeiro em Novo BID."}</td></tr>`;
   const t=rows.filter(r=>r.saving!=null);
-  $("pfoot").innerHTML=t.length?`<td colspan="5">Total do filtro</td><td class="r">${brl(t.reduce((a,r)=>a+r.atual,0))}</td><td class="r">${brl(t.reduce((a,r)=>a+r.prop,0))}</td><td></td><td class="r">${brl(t.reduce((a,r)=>a+r.saving,0))}</td><td colspan="12"></td>`:"";
+  $("pfoot").innerHTML=t.length?`<td colspan="5">Total do filtro</td><td class="r">${brl(t.reduce((a,r)=>a+r.atual,0))}</td><td class="r">${brl(t.reduce((a,r)=>a+r.prop,0))}</td><td></td><td class="r">${brl(t.reduce((a,r)=>a+r.saving,0))}</td><td colspan="13"></td>`:"";
   renderCrono();renderMensal();renderTrash();
   const feed=ATIVOS().flatMap(b=>(b.hist||[]).map(h=>({...h,id:b.id,nome:b.deal||"(sem nome)"}))).sort((a,b)=>a.em<b.em?1:-1).slice(0,25);
   $("feed").innerHTML=feed.length?feed.map(h=>`<li><div class="when">${fmtDT(h.em)} · ${esc(h.por)}</div><a data-openlink="${esc(h.id)}">${esc(h.nome)}</a>: ${h.tipo==="c"?"💬 ":""}${esc(h.texto).replace(/\n/g,"; ")}</li>`).join(""):`<li class="empty">Sem movimentações ainda.</li>`;
@@ -1338,7 +1375,51 @@ function renderHist(){
 }
 function renderTrashBanner(){$("trashBanner").innerHTML=S&&S.lixeira?`<div class="banner trash"><span>🗑 Este BID está na lixeira desde ${fmtDT(S.lixeira.em)}, por ${esc(S.lixeira.por||"")}${S.lixeira.motivo?` · motivo: ${esc(S.lixeira.motivo)}`:""}.</span><button class="btn primary" data-trrest="${esc(S.id)}">Restaurar</button></div>`:"";$("trashBtn").hidden=!!(S&&S.lixeira);$("trashBtn").textContent=S&&S._new?"🗑 Descartar BID novo":"🗑 Mover para a lixeira";}
 function renderMeta(){renderTrashBanner();$("bidMeta").textContent=`${S.id} · criado em ${fmtDT(S.criadoEm)} por ${S.criadoPor} · última gravação ${fmtDT(S.atualizadoEm)} por ${S.atualizadoPor}`;}
-function renderBid(){renderBidForm();renderSuppliers();renderCriteria();renderResult();renderAcomp();renderMeta();renderTabs();}
+function renderBid(){renderBidForm();renderSuppliers();renderCriteria();renderResult();renderAcomp();renderAcoes();renderMeta();renderTabs();}
+const AC_ST=["Pendente","Em andamento","Concluída"];
+function acList(b){if(!Array.isArray(b.acoes))b.acoes=[];return b.acoes;}
+function acProg(b){const L=Array.isArray(b&&b.acoes)?b.acoes:[],d=L.filter(a=>a.st==="Concluída").length;return{n:L.length,d,pct:L.length?d/L.length*100:0,late:L.filter(a=>a.st!=="Concluída"&&a.prazo&&a.prazo<today()).length};}
+function renderAcoes(tbl=true){
+  if(!S)return;const L=acList(S),p=acProg(S),em=L.filter(a=>a.st==="Em andamento").length,pend=L.filter(a=>a.st==="Pendente").length;
+  const k=(t,v,s="",cls="")=>`<div class="kpi"><span>${t}</span><b class="${cls}">${v}</b>${s?`<span>${s}</span>`:""}</div>`;
+  $("acKpis").innerHTML=k("Ações",p.n)+k("Concluídas",p.d,"","ok")+k("Em andamento",em)+k("Pendentes",pend)+k("Atrasadas",p.late,"",p.late?"no":"");
+  $("acBar").innerHTML=`<div class="acbox"><span class="calc">Progresso do processo</span><div style="font:800 2.2rem Archivo,sans-serif;margin-top:4px">${p.n?pc(p.pct).replace(",0%","%"):"—"}</div><div class="pbar"><div style="width:${p.pct}%"></div></div><span class="calc">${p.n?`${p.d} de ${p.n} ações concluídas`:"Adicione a primeira ação abaixo."}</span></div>`;
+  // gráfico de progressão: criadas x concluídas acumuladas por dia
+  const ev=[];L.forEach(a=>{const c=(a.criadaEm||"").slice(0,10)||today();ev.push([c,"c"]);if(a.st==="Concluída"&&a.concluidaEm)ev.push([a.concluidaEm.slice(0,10),"d"]);});
+  if(!ev.length){$("acChart").innerHTML=`<div class="acbox"><span class="calc">Gráfico de progressão</span><p class="empty" style="margin:14px 0 0">O gráfico aparece quando houver ações.</p></div>`;if(tbl)renderAcTable();return;}
+  const dias=[...new Set([...ev.map(e=>e[0]),today()])].sort();let c=0,d=0;
+  const pts=dias.map(x=>{c+=ev.filter(e=>e[0]===x&&e[1]==="c").length;d+=ev.filter(e=>e[0]===x&&e[1]==="d").length;return{x,c,d};});
+  {const f=new Date(dias[0]+"T12:00");f.setDate(f.getDate()-1);pts.unshift({x:f.toLocaleDateString("sv"),c:0,d:0});}
+  const W=560,H=190,P={l:34,r:12,t:14,b:30},mx=Math.max(1,...pts.map(q=>q.c)),n=pts.length;
+  const X=i=>P.l+(n===1?(W-P.l-P.r)/2:i*(W-P.l-P.r)/(n-1)),Y=v=>H-P.b-v/mx*(H-P.t-P.b);
+  const line=key=>pts.map((q,i)=>`${i?"L":"M"}${X(i).toFixed(1)},${Y(q[key]).toFixed(1)}`).join(" ");
+  const area=`${line("d")} L${X(n-1).toFixed(1)},${Y(0)} L${X(0).toFixed(1)},${Y(0)} Z`;
+  const step=Math.max(1,Math.ceil(n/6)),lbl=pts.map((q,i)=>i%step===0||i===n-1?`<text x="${X(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">${q.x.slice(8,10)}/${q.x.slice(5,7)}</text>`:"").join("");
+  const yt=[0,Math.round(mx/2),mx].filter((v,i,a)=>a.indexOf(v)===i).map(v=>`<text x="${P.l-6}" y="${Y(v)+3}" text-anchor="end" font-size="10" fill="currentColor" opacity=".7">${v}</text><line x1="${P.l}" x2="${W-P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" opacity=".12"/>`).join("");
+  $("acChart").innerHTML=`<div class="acbox"><span class="calc">Gráfico de progressão (acumulado)</span>
+   <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-top:6px;color:var(--text)" role="img" aria-label="Ações criadas e concluídas ao longo do tempo">${yt}
+    <path d="${area}" fill="var(--good)" opacity=".15"/><path d="${line("c")}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4"/>
+    <path d="${line("d")}" fill="none" stroke="var(--good)" stroke-width="3"/>${pts.map((q,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(q.d).toFixed(1)}" r="3.5" fill="var(--good)"><title>${fmtD(q.x)}: ${q.d} de ${q.c} concluídas</title></circle>`).join("")}${lbl}</svg>
+   <span class="calc"><span style="display:inline-block;width:14px;height:3px;background:var(--good);vertical-align:middle"></span> Concluídas &nbsp; <span style="display:inline-block;width:14px;border-top:2px dashed var(--muted);vertical-align:middle"></span> Total de ações</span></div>`;
+  if(tbl)renderAcTable();
+}
+function renderAcTable(){
+  const L=acList(S),hj=today();
+  $("acResp").innerHTML=[...new Set([...buyers(),Store.user].filter(Boolean))].map(n=>`<option value="${esc(n)}">`).join("");
+  $("acBody").innerHTML=L.length?L.map((a,i)=>`<tr class="${a.st==="Concluída"?"done":""} ${a.st!=="Concluída"&&a.prazo&&a.prazo<hj?"late":""}" style="cursor:default">
+    <td style="text-align:center"><input type="checkbox" data-ai="${i}" data-ak="ok" ${a.st==="Concluída"?"checked":""} aria-label="Concluída"></td>
+    <td style="min-width:260px"><input type="text" data-ai="${i}" data-ak="t" value="${esc(a.t)}" aria-label="Ação"></td>
+    <td style="min-width:150px"><input type="text" data-ai="${i}" data-ak="resp" list="acResp" value="${esc(a.resp||"")}" aria-label="Responsável"></td>
+    <td style="min-width:140px"><input type="date" data-ai="${i}" data-ak="prazo" value="${esc(a.prazo||"")}" aria-label="Prazo"></td>
+    <td style="min-width:140px"><select data-ai="${i}" data-ak="st" aria-label="Status">${AC_ST.map(s=>`<option ${a.st===s?"selected":""}>${s}</option>`).join("")}</select></td>
+    <td>${a.concluidaEm?fmtD(a.concluidaEm.slice(0,10)):"—"}</td>
+    <td><button class="icon" data-acdel="${i}" aria-label="Remover ação">×</button></td></tr>`).join("")
+    :`<tr><td colspan="7" class="empty" style="padding:16px;cursor:default">Nenhuma ação cadastrada para este BID.</td></tr>`;
+}
+function acSet(i,k,v){const a=acList(S)[i];if(!a)return;
+  if(k==="ok"){a.st=v?"Concluída":"Pendente";}else a[k]=v;
+  if(k==="ok"||k==="st"){if(a.st==="Concluída"){if(!a.concluidaEm)a.concluidaEm=new Date().toISOString();}else a.concluidaEm="";}
+  setDirty();if(k==="t"||k==="resp")return;renderAcoes(k!=="prazo");renderTabs();}
 
 /* ===================== NAVEGAÇÃO ===================== */
 function setDirty(v=true){dirty=v;$("savebar").hidden=!v;}
@@ -1347,7 +1428,7 @@ function showView(v){
   if(v==="painel"){fillFilters();renderPainel();}
   renderTabs();window.scrollTo({top:0});
 }
-function showTab(t){tab=t;["prep","aval","acomp"].forEach(id=>$(id).hidden=id!==t);if(t==="acomp")renderAcomp();if(t==="aval"){renderCriteria();renderResult();}if(t==="prep")renderBidCalc();renderTabs();window.scrollTo({top:0});}
+function showTab(t){tab=t;["prep","aval","acomp","acoes"].forEach(id=>$(id).hidden=id!==t);if(t==="acomp")renderAcomp();if(t==="acoes")renderAcoes();if(t==="aval"){renderCriteria();renderResult();}if(t==="prep")renderBidCalc();renderTabs();window.scrollTo({top:0});}
 function openBid(id){
   const b=BIDS.find(x=>x.id===id);if(!b)return;ensureCond(b);alignEv(b);
   S=clone(b);delete S._log;S._etag=b._etag;saved=snapshot(b);setDirty(false);
@@ -1385,6 +1466,7 @@ document.addEventListener("click",e=>{
   const a=e.target.closest("[data-openlink]");if(a){openBid(a.dataset.openlink);return;}
   const gl=e.target.closest("[data-golink]");if(gl){showTab(gl.dataset.golink);return;}
   const fd=e.target.closest("[data-fdl]");if(fd&&S){const[i,j]=fd.dataset.fdl.split(":").map(Number),f=ensureFiles()[i][j];toast("Preparando o arquivo…");Store.fileBlob(f).then(bl=>bl?saveFile(f.nome,bl):null).catch(err=>banner(esc(err.message)));return;}
+  const ad=e.target.closest("[data-acdel]");if(ad&&S){const a=acList(S)[+ad.dataset.acdel];if(a&&confirm(`Remover a ação "${a.t}"?`)){S.acoes.splice(+ad.dataset.acdel,1);setDirty();renderAcoes();renderTabs();}return;}
   const tv=e.target.closest("[data-trview]");if(tv){openBid(tv.dataset.trview);return;}
   const tr2=e.target.closest("[data-trrest]");if(tr2){restoreTrash(tr2.dataset.trrest);return;}
   const b=e.target.closest("button");if(!b)return;
@@ -1412,6 +1494,10 @@ $("bidTipo").onchange=e=>{const t=e.target.value;if(t===(S.tipo||"recorrente"))r
   if(ranked().length&&!confirm("Mudar o tipo troca os critérios e apaga as notas já dadas (os preços são mantidos). Continuar?")){e.target.value=S.tipo||"recorrente";return;}
   S.tipo=t;S.w=TIPOS[t].crit.map(c=>c.w);S.sc=TIPOS[t].crit.map(()=>S.sup.map(()=>null));S.opt={};S.bens=S.sup.map(()=>null);S.idx=S.sup.map(()=>null);setDirty();renderBid();toast("Critérios de "+TIPOS[t].nome.toLowerCase()+" aplicados");};
 $("reload").onclick=()=>loadAll();
+$("na_add").onclick=()=>{const t=$("na_t").value.trim();if(!t){toast("Descreva a ação");$("na_t").focus();return;}
+  acList(S).push({id:"a"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),t,resp:$("na_r").value.trim(),prazo:$("na_p").value,st:"Pendente",criadaEm:new Date().toISOString(),criadaPor:Store.user,concluidaEm:""});
+  $("na_t").value="";$("na_p").value="";setDirty();renderAcoes();renderTabs();$("na_t").focus();};
+$("na_t").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("na_add").click();}});
 $("cfGen").onclick=()=>genCfg();$("cfClose").onclick=()=>{$("cfgSec").hidden=true;};
 $("trashBtn").onclick=()=>trashCurrent();
 $("trashOpen").onclick=()=>{const s=$("trashSec");s.hidden=!s.hidden;if(!s.hidden){renderTrash();s.scrollIntoView({behavior:"smooth",block:"start"});}};
@@ -1477,6 +1563,7 @@ $("dealName").oninput=e=>{S.deal=e.target.value;setDirty();renderRef();};
 $("bidArea").oninput=e=>{S.area=e.target.value.trim();setDirty();};
 document.addEventListener("change",async e=>{
   const t=e.target;if(!S)return;
+  if(t.dataset.ai!=null){const k=t.dataset.ak;acSet(+t.dataset.ai,k,k==="ok"?t.checked:t.value);return;}
   if(t.dataset.upl!=null){
     const i=+t.dataset.upl,files=[...t.files];t.value="";if(!files.length)return;
     const bid=S;let ok=0;
@@ -1543,9 +1630,9 @@ $("copyCC").onclick=()=>{
   copyText([`${S.deal||"BID"} · comparativo de condições comerciais`,H.join("\t"),...L].join("\n"),"Comparativo copiado. Cole no Excel");
 };
 $("copyTsv").onclick=()=>{
-  const H=["BID","TIPO","ÁREA SOLICITANTE","FORNECEDOR","ESCOPO","VALOR MÉDIO","PROPOSTA","TARGET","SAVING","SAVING %","PRAZO PGTO","SLA","GARANTIA","REAJUSTE","PLUS/BENEFÍCIOS","RISCO","STATUS","OBSERVAÇÕES","RESPONSÁVEL","PRAZO","TEMPO DE CONTRATO","MOEDA","QTD PARCELAS","VALOR DA PARCELA","1º PAGAMENTO"];
+  const H=["BID","TIPO","ÁREA SOLICITANTE","FORNECEDOR","ESCOPO","VALOR MÉDIO","PROPOSTA","TARGET","SAVING","SAVING %","PRAZO PGTO","SLA","GARANTIA","REAJUSTE","PLUS/BENEFÍCIOS","RISCO","STATUS","AÇÕES CONCLUÍDAS","OBSERVAÇÕES","RESPONSÁVEL","PRAZO","TEMPO DE CONTRATO","MOEDA","QTD PARCELAS","VALOR DA PARCELA","1º PAGAMENTO"];
   const f=v=>v==null||v===""?"":String(Math.round(v*100)/100).replace(".",","),c=s=>String(s??"").replace(/[\t\n]/g," ");
-  const rows=filteredRows().map(r=>[c(r.nome),r.tipo,c(r.area),c(r.forn),c(r.escopo),f(r.atual),f(r.prop),f(r.target),f(r.saving),r.savingPct==null?"":f(r.savingPct),c(r.pgto),c(r.sla),c(r.gar),c(r.idxTxt),c(r.bensTxt),r.risco,r.status,c(r.acao),c(r.resp),fmtD(r.prazo),r.cc.tempo,r.cc.moeda,r.cc.parcelas??"",f(r.cc.parcela),fmtD(r.cc.primeiroPgto)].join("\t"));
+  const rows=filteredRows().map(r=>[c(r.nome),r.tipo,c(r.area),c(r.forn),c(r.escopo),f(r.atual),f(r.prop),f(r.target),f(r.saving),r.savingPct==null?"":f(r.savingPct),c(r.pgto),c(r.sla),c(r.gar),c(r.idxTxt),c(r.bensTxt),r.risco,r.status,r.acN?`${r.acD}/${r.acN} (${Math.round(r.acPct)}%)`:"",c(r.acao),c(r.resp),fmtD(r.prazo),r.cc.tempo,r.cc.moeda,r.cc.parcelas??"",f(r.cc.parcela),fmtD(r.cc.primeiroPgto)].join("\t"));
   copyText([H.join("\t"),...rows].join("\n"),"Painel copiado. Cole no Excel");
 };
 
